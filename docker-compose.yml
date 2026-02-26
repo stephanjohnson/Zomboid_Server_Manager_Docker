@@ -117,6 +117,8 @@ services:
     image: postgres:16-alpine
     container_name: pz-db
     restart: unless-stopped
+    ports:
+      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
@@ -130,6 +132,7 @@ services:
       retries: 5
     networks:
       - backend-net
+      - zomboid-net
 
   # ---------------------------------------------------------------------------
   # Redis — Queue, cache, rate limiting
