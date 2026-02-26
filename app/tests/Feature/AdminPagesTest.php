@@ -188,6 +188,55 @@ it('renders the config page', function () {
     );
 });
 
+it('renders config page with correct props', function () {
+    mockAdminIniParser([
+        'MaxPlayers' => '16',
+        'ServerName' => 'TestServer',
+        'Public' => 'true',
+        'Password' => 'secret',
+        'Mods' => 'Mod1;Mod2',
+    ]);
+    mockAdminLuaParser([
+        'Zombies' => 4,
+        'DayLength' => 2,
+        'ZombieLore' => ['Speed' => 2, 'Strength' => 2],
+    ]);
+
+    $response = $this->actingAs(adminUser())->get('/admin/config');
+
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page
+        ->component('admin/config')
+        ->where('server_config.MaxPlayers', '16')
+        ->where('server_config.ServerName', 'TestServer')
+        ->where('server_config.Public', 'true')
+        ->where('server_config.Mods', 'Mod1;Mod2')
+        ->where('sandbox_config.Zombies', 4)
+        ->where('sandbox_config.DayLength', 2)
+        ->where('sandbox_config.ZombieLore.Speed', 2)
+    );
+});
+
+it('renders config page when files are unavailable', function () {
+    // Parsers throw when files don't exist — controller catches and returns empty arrays
+    $iniParser = Mockery::mock(ServerIniParser::class);
+    $iniParser->shouldReceive('read')->andThrow(new RuntimeException('File not found'));
+    app()->instance(ServerIniParser::class, $iniParser);
+
+    $luaParser = Mockery::mock(SandboxLuaParser::class);
+    $luaParser->shouldReceive('read')->andThrow(new RuntimeException('File not found'));
+    app()->instance(SandboxLuaParser::class, $luaParser);
+
+    $response = $this->actingAs(adminUser())->get('/admin/config');
+
+    $response->assertOk();
+    $response->assertInertia(fn ($page) => $page
+        ->component('admin/config')
+        ->where('server_config', [])
+        ->where('sandbox_config', [])
+    );
+});
+
 it('can update server config', function () {
     mockAdminIniParser(['MaxPlayers' => '16']);
     mockAdminLuaParser();
@@ -197,6 +246,46 @@ it('can update server config', function () {
 
     $response->assertOk();
     $response->assertJson(['restart_required' => true]);
+});
+
+it('can update sandbox config', function () {
+    mockAdminIniParser();
+    mockAdminLuaParser(['Zombies' => 4]);
+
+    $response = $this->actingAs(adminUser())
+        ->patchJson('/admin/config/sandbox', ['settings' => ['Zombies' => 1]]);
+
+    $response->assertOk();
+    $response->assertJson(['restart_required' => true]);
+});
+
+it('creates audit log for admin config updates', function () {
+    mockAdminIniParser(['MaxPlayers' => '16']);
+    mockAdminLuaParser();
+
+    $admin = adminUser();
+
+    $this->actingAs($admin)
+        ->patchJson('/admin/config/server', ['settings' => ['MaxPlayers' => '32']]);
+
+    $log = AuditLog::query()->where('action', 'config.server.update')->first();
+
+    expect($log)->not->toBeNull()
+        ->and($log->actor)->toBe($admin->name)
+        ->and($log->target)->toBe('server.ini');
+});
+
+it('validates settings required for admin config update', function () {
+    mockAdminIniParser();
+    mockAdminLuaParser();
+
+    $this->actingAs(adminUser())
+        ->patchJson('/admin/config/server', [])
+        ->assertUnprocessable();
+
+    $this->actingAs(adminUser())
+        ->patchJson('/admin/config/sandbox', [])
+        ->assertUnprocessable();
 });
 
 // --- Mod Management ---

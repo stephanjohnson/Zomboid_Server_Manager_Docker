@@ -833,7 +833,7 @@ php artisan scribe:generate
 | Phase 14 — Admin Management Pages | DONE | 6 admin pages (players, config, mods, backups, whitelist, audit), 19 new tests |
 | Phase 15 — RCON Console + Live Logs | DONE | RCON console, live log viewer, server start/stop/restart/save controls, 11 new tests |
 | Phase 16 — Player Registration + PZ Sync | DONE | Web registration → auto PZ account, password sync, player portal, email verification, 35 tests |
-| Phase 17 — Config Page UX Overhaul | TODO | Smart inputs (toggles, selects, numbers), grouped collapsible sections, descriptions |
+| Phase 17 — Config Page UX Overhaul | DONE | Smart inputs (Switch/Select/number), grouped collapsible sections, search filter, sensitive field toggles, config metadata system, 6 new tests |
 | Phase 18 — PZ Lua Bridge Mod | DONE | Server-side Lua mod: inventory snapshots, delivery queue, position tracking via shared volume |
 | Phase 19 — Admin Player Map | TODO | Leaflet.js map, player markers (online/offline/dead), players.db SQLite connection |
 | Phase 20 — Admin Inventory Management | TODO | Inventory grid with item icons, give/remove items via delivery queue, audit logged |
