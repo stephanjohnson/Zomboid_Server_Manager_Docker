@@ -96,7 +96,8 @@ it('creates backup when rcon is offline', function () {
     }
 });
 
-it('creates backup with correct type classification', function (BackupType $type, string $expectedPrefix) {
+it('creates backup with correct type classification', function (string $typeValue, string $expectedPrefix) {
+    $type = BackupType::from($typeValue);
     Process::fake([
         '*' => Process::result(output: '', exitCode: 0),
     ]);
@@ -113,11 +114,11 @@ it('creates backup with correct type classification', function (BackupType $type
         cleanupDirs($dirs);
     }
 })->with([
-    [BackupType::Manual, 'backup_manual_'],
-    [BackupType::Scheduled, 'backup_scheduled_'],
-    [BackupType::Daily, 'backup_daily_'],
-    [BackupType::PreRollback, 'backup_pre_rollback_'],
-    [BackupType::PreUpdate, 'backup_pre_update_'],
+    ['manual', 'backup_manual_'],
+    ['scheduled', 'backup_scheduled_'],
+    ['daily', 'backup_daily_'],
+    ['pre_rollback', 'backup_pre_rollback_'],
+    ['pre_update', 'backup_pre_update_'],
 ]);
 
 // ── Retention Cleanup ────────────────────────────────────────────────

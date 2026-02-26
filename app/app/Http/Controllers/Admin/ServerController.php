@@ -19,13 +19,21 @@ class ServerController extends Controller
 
     public function start(Request $request): JsonResponse
     {
-        $status = $this->docker->getContainerStatus();
+        try {
+            $status = $this->docker->getContainerStatus();
+        } catch (\Throwable) {
+            return response()->json(['error' => 'Cannot connect to Docker daemon'], 503);
+        }
 
         if ($status['running']) {
             return response()->json(['error' => 'Server is already running'], 409);
         }
 
-        $this->docker->startContainer();
+        try {
+            $this->docker->startContainer();
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Failed to start server: '.$e->getMessage()], 503);
+        }
 
         $this->auditLogger->log(
             actor: $request->user()->name ?? 'admin',
@@ -47,7 +55,11 @@ class ServerController extends Controller
             // RCON unavailable — proceed with Docker stop
         }
 
-        $this->docker->stopContainer(timeout: 30);
+        try {
+            $this->docker->stopContainer(timeout: 30);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Failed to stop server: '.$e->getMessage()], 503);
+        }
 
         $this->auditLogger->log(
             actor: $request->user()->name ?? 'admin',
@@ -67,7 +79,11 @@ class ServerController extends Controller
             // RCON unavailable — proceed with restart
         }
 
-        $this->docker->restartContainer(timeout: 30);
+        try {
+            $this->docker->restartContainer(timeout: 30);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Failed to restart server: '.$e->getMessage()], 503);
+        }
 
         $this->auditLogger->log(
             actor: $request->user()->name ?? 'admin',

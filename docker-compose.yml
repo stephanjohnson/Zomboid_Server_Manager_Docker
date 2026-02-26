@@ -45,7 +45,7 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-zomboid}
       DB_USERNAME: ${DB_USERNAME:-zomboid}
-      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_PASSWORD: ${DB_PASSWORD:-zomboid}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
@@ -58,7 +58,7 @@ services:
       PZ_SERVER_NAME: ${PZ_SERVER_NAME:-ZomboidServer}
       PZ_RCON_HOST: game-server
       PZ_RCON_PORT: ${PZ_RCON_PORT:-27015}
-      PZ_RCON_PASSWORD: ${PZ_RCON_PASSWORD:-}
+      PZ_RCON_PASSWORD: ${PZ_RCON_PASSWORD:-changeme}
       BACKUP_PATH: /backups
       TZ: ${TZ:-Asia/Tbilisi}
     networks:
@@ -93,7 +93,7 @@ services:
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-zomboid}
       DB_USERNAME: ${DB_USERNAME:-zomboid}
-      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_PASSWORD: ${DB_PASSWORD:-zomboid}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
@@ -103,7 +103,7 @@ services:
       PZ_SERVER_NAME: ${PZ_SERVER_NAME:-ZomboidServer}
       PZ_RCON_HOST: game-server
       PZ_RCON_PORT: ${PZ_RCON_PORT:-27015}
-      PZ_RCON_PASSWORD: ${PZ_RCON_PASSWORD:-}
+      PZ_RCON_PASSWORD: ${PZ_RCON_PASSWORD:-changeme}
       BACKUP_PATH: /backups
       TZ: ${TZ:-Asia/Tbilisi}
     networks:
@@ -122,7 +122,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_DATABASE:-zomboid}
       POSTGRES_USER: ${DB_USERNAME:-zomboid}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-zomboid}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-zomboid} -d ${DB_DATABASE:-zomboid}"]
       interval: 10s

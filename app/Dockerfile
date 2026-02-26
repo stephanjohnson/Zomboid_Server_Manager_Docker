@@ -62,9 +62,14 @@ COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 # Supervisor configuration
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+# Entrypoint — fixes Docker socket permissions at runtime
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # PHP production config
 COPY docker/php.ini /usr/local/etc/php/conf.d/99-production.ini
 
 EXPOSE 8000
 
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

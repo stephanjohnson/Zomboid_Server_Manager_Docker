@@ -4,7 +4,7 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Laravel\Fortify\Features;
 use Tests\TestCase;
 
@@ -85,9 +85,16 @@ class AuthenticationTest extends TestCase
 
     public function test_users_are_rate_limited()
     {
+        $this->withMiddleware(ThrottleRequests::class);
+
         $user = User::factory()->create();
 
-        RateLimiter::increment(md5('login'.implode('|', [$user->email, '127.0.0.1'])), amount: 5);
+        for ($i = 0; $i < 5; $i++) {
+            $this->post(route('login.store'), [
+                'email' => $user->email,
+                'password' => 'wrong-password',
+            ]);
+        }
 
         $response = $this->post(route('login.store'), [
             'email' => $user->email,

@@ -19,7 +19,11 @@ class DashboardController extends Controller
 
     public function __invoke(): Response
     {
-        $containerStatus = $this->docker->getContainerStatus();
+        try {
+            $containerStatus = $this->docker->getContainerStatus();
+        } catch (\Throwable) {
+            $containerStatus = ['running' => false];
+        }
         $online = $containerStatus['running'] ?? false;
 
         $server = [

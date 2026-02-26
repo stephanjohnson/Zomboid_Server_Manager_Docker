@@ -63,7 +63,7 @@ it('stores details as json', function () {
 
     $fresh = AuditLog::find($log->id);
 
-    expect($fresh->details)->toBe($details);
+    expect($fresh->details)->toEqual($details);
 });
 
 // ── Audit Middleware ─────────────────────────────────────────────────

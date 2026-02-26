@@ -2,7 +2,7 @@ services:
   game-server:
     image: renegademaster/zomboid-dedicated-server:latest
     environment:
-      ADMIN_PASSWORD: ${PZ_ADMIN_PASSWORD:?PZ_ADMIN_PASSWORD is required}
+      ADMIN_PASSWORD: ${PZ_ADMIN_PASSWORD:-admin}
       ADMIN_USERNAME: ${PZ_ADMIN_USERNAME:-admin}
       AUTOSAVE_INTERVAL: ${PZ_AUTOSAVE_INTERVAL:-15}
       BIND_IP: "0.0.0.0"
@@ -16,7 +16,7 @@ services:
       MOD_WORKSHOP_IDS: ${PZ_WORKSHOP_IDS:-}
       PAUSE_ON_EMPTY: ${PZ_PAUSE_ON_EMPTY:-true}
       PUBLIC_SERVER: ${PZ_PUBLIC_SERVER:-true}
-      RCON_PASSWORD: ${PZ_RCON_PASSWORD:?PZ_RCON_PASSWORD is required}
+      RCON_PASSWORD: ${PZ_RCON_PASSWORD:-changeme}
       RCON_PORT: ${PZ_RCON_PORT:-27015}
       SERVER_NAME: ${PZ_SERVER_NAME:-ZomboidServer}
       SERVER_PASSWORD: ${PZ_SERVER_PASSWORD:-}

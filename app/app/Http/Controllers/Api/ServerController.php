@@ -22,7 +22,11 @@ class ServerController
 
     public function status(): JsonResponse
     {
-        $containerStatus = $this->docker->getContainerStatus();
+        try {
+            $containerStatus = $this->docker->getContainerStatus();
+        } catch (\Throwable) {
+            $containerStatus = ['running' => false];
+        }
         $online = $containerStatus['running'] ?? false;
 
         $result = [
@@ -57,7 +61,13 @@ class ServerController
 
     public function start(): JsonResponse
     {
-        $status = $this->docker->getContainerStatus();
+        try {
+            $status = $this->docker->getContainerStatus();
+        } catch (\Throwable) {
+            return response()->json([
+                'error' => 'Cannot connect to Docker daemon',
+            ], 503);
+        }
 
         if ($status['running']) {
             return response()->json([
@@ -65,7 +75,14 @@ class ServerController
             ], 409);
         }
 
-        $this->docker->startContainer();
+        try {
+            $this->docker->startContainer();
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => 'Failed to start server',
+                'detail' => $e->getMessage(),
+            ], 503);
+        }
 
         return response()->json([
             'message' => 'Server starting',
@@ -83,7 +100,14 @@ class ServerController
             // RCON unavailable — proceed with Docker stop
         }
 
-        $this->docker->stopContainer(timeout: 30);
+        try {
+            $this->docker->stopContainer(timeout: 30);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => 'Failed to stop server',
+                'detail' => $e->getMessage(),
+            ], 503);
+        }
 
         return response()->json([
             'message' => 'Server stopped',
@@ -121,7 +145,14 @@ class ServerController
             // RCON unavailable — proceed with restart
         }
 
-        $this->docker->restartContainer(timeout: 30);
+        try {
+            $this->docker->restartContainer(timeout: 30);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => 'Failed to restart server',
+                'detail' => $e->getMessage(),
+            ], 503);
+        }
 
         return response()->json([
             'message' => 'Server restarting',
@@ -171,7 +202,14 @@ class ServerController
 
         $sinceTimestamp = $since ? (string) Carbon::parse($since)->timestamp : null;
 
-        $lines = $this->docker->getContainerLogs($tail, $sinceTimestamp);
+        try {
+            $lines = $this->docker->getContainerLogs($tail, $sinceTimestamp);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => 'Cannot retrieve logs: Docker daemon unavailable',
+                'detail' => $e->getMessage(),
+            ], 503);
+        }
 
         return response()->json([
             'lines' => $lines,

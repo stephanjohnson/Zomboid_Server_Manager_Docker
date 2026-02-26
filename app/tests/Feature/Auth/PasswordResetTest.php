@@ -59,8 +59,8 @@ class PasswordResetTest extends TestCase
             $response = $this->post(route('password.update'), [
                 'token' => $notification->token,
                 'email' => $user->email,
-                'password' => 'password',
-                'password_confirmation' => 'password',
+                'password' => 'P@ssw0rd!2024x',
+                'password_confirmation' => 'P@ssw0rd!2024x',
             ]);
 
             $response
@@ -78,8 +78,8 @@ class PasswordResetTest extends TestCase
         $response = $this->post(route('password.update'), [
             'token' => 'invalid-token',
             'email' => $user->email,
-            'password' => 'newpassword123',
-            'password_confirmation' => 'newpassword123',
+            'password' => 'N3wP@ssw0rd!x',
+            'password_confirmation' => 'N3wP@ssw0rd!x',
         ]);
 
         $response->assertSessionHasErrors('email');
