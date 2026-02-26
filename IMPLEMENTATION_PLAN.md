@@ -701,6 +701,7 @@ View and manage player inventories with item icons via the Lua bridge.
 - **In-game time & weather widget** — display current PZ game time and weather conditions (temperature, rain, fog) on the dashboard via Lua bridge export (`getGameTime()`, `getClimateManager()`)
 - **Player leaderboards / top charts** — time survived, zombie kills, deaths, hours played sourced from `players.db` → `networkPlayers` table (no mod needed, direct SQLite read)
 - **Player stats cards** — individual player stats displayed on the players page (kills, hours, profession, skills)
+- **Log Extender integration** — optional companion mod ([Workshop #1844524972](https://steamcommunity.com/sharedfiles/filedetails/?id=1844524972)) for event-driven stats. Laravel scheduler job parses `_player.txt`, `_pvp.txt`, `_craft.txt` logs into DB tables. Powers kill feed, recent deaths, crafting activity, PvP history. Auto-registered in `configure-server.sh` alongside ZomboidManager.
 
 ### Phase 22+: Subscriptions (Stage 5 — Monetization)
 
@@ -836,6 +837,6 @@ php artisan scribe:generate
 | Phase 18 — PZ Lua Bridge Mod | DONE | Server-side Lua mod: inventory snapshots, delivery queue, position tracking via shared volume |
 | Phase 19 — Admin Player Map | TODO | Leaflet.js map, player markers (online/offline/dead), players.db SQLite connection |
 | Phase 20 — Admin Inventory Management | TODO | Inventory grid with item icons, give/remove items via delivery queue, audit logged |
-| Phase 21 — Dashboard & UX Polish | TODO | Mobile responsive, toasts, skeletons, error boundaries, in-game time/weather widget, player leaderboards, player stats |
+| Phase 21 — Dashboard & UX Polish | TODO | Mobile responsive, toasts, skeletons, error boundaries, in-game time/weather widget, player leaderboards, player stats, Log Extender event ingestion |
 | Phase 22+ — Subscriptions | TODO | Cashier/Stripe (deferred — monetization) |
 | Phase 23+ — Item Shop | TODO | Shop CRUD, payments, reuses Lua bridge delivery queue (deferred — monetization) |
