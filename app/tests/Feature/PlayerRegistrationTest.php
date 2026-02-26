@@ -4,6 +4,8 @@ use App\Enums\UserRole;
 use App\Models\User;
 use App\Models\WhitelistEntry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
@@ -11,6 +13,38 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     $this->withoutVite();
 });
+
+/**
+ * Set up a temporary PZ SQLite database with a whitelist table.
+ */
+function setupTestPzSqlite(): string
+{
+    $dbPath = sys_get_temp_dir().'/pz_test_sync_'.uniqid().'.db';
+    touch($dbPath);
+
+    config(['database.connections.pz_sqlite.database' => $dbPath]);
+    DB::purge('pz_sqlite');
+
+    DB::connection('pz_sqlite')->statement('
+        CREATE TABLE IF NOT EXISTS whitelist (
+            username TEXT PRIMARY KEY,
+            password TEXT
+        )
+    ');
+
+    return $dbPath;
+}
+
+/**
+ * Insert a PZ account into the temporary SQLite whitelist.
+ */
+function insertPzAccount(string $username, string $password): void
+{
+    DB::connection('pz_sqlite')->table('whitelist')->insert([
+        'username' => $username,
+        'password' => $password,
+    ]);
+}
 
 describe('Login with username', function () {
     it('authenticates with username and password', function () {
@@ -236,8 +270,221 @@ describe('Player portal', function () {
 });
 
 describe('PZ account sync command', function () {
-    it('runs successfully when SQLite is unavailable', function () {
+    it('fails gracefully when SQLite is unavailable', function () {
         $this->artisan('pz:sync-accounts')
             ->assertFailed();
+    });
+
+    it('auto-creates web user from PZ account', function () {
+        $dbPath = setupTestPzSqlite();
+        insertPzAccount('ingame_player', 'gamepass123');
+
+        $this->artisan('pz:sync-accounts')
+            ->assertSuccessful();
+
+        $user = User::where('username', 'ingame_player')->first();
+        expect($user)->not->toBeNull();
+        expect($user->role)->toBe(UserRole::Player);
+        expect($user->email)->toBeNull();
+        expect(Hash::check('gamepass123', $user->password))->toBeTrue();
+
+        DB::connection('pz_sqlite')->disconnect();
+        @unlink($dbPath);
+    });
+
+    it('links whitelist entry to auto-created user', function () {
+        $dbPath = setupTestPzSqlite();
+        insertPzAccount('linked_player', 'pass123');
+
+        $this->artisan('pz:sync-accounts')
+            ->assertSuccessful();
+
+        $user = User::where('username', 'linked_player')->first();
+        $entry = WhitelistEntry::where('pz_username', 'linked_player')->first();
+
+        expect($entry)->not->toBeNull();
+        expect($entry->user_id)->toBe($user->id);
+        expect($entry->pz_password_hash)->toBe('pass123');
+        expect($entry->active)->toBeTrue();
+        expect($entry->synced_at)->not->toBeNull();
+
+        DB::connection('pz_sqlite')->disconnect();
+        @unlink($dbPath);
+    });
+
+    it('links existing whitelist entry when auto-creating user', function () {
+        $dbPath = setupTestPzSqlite();
+        insertPzAccount('existing_entry', 'pass456');
+
+        // Pre-existing WhitelistEntry without a user_id
+        $entry = WhitelistEntry::create([
+            'pz_username' => 'existing_entry',
+            'pz_password_hash' => 'old_hash',
+            'active' => true,
+        ]);
+
+        $this->artisan('pz:sync-accounts')
+            ->assertSuccessful();
+
+        $user = User::where('username', 'existing_entry')->first();
+        expect($user)->not->toBeNull();
+
+        $entry->refresh();
+        expect($entry->user_id)->toBe($user->id);
+        expect($entry->pz_password_hash)->toBe('pass456');
+
+        DB::connection('pz_sqlite')->disconnect();
+        @unlink($dbPath);
+    });
+
+    it('skips usernames that already exist in users table', function () {
+        $dbPath = setupTestPzSqlite();
+        User::factory()->create(['username' => 'taken_user']);
+        insertPzAccount('taken_user', 'gamepass');
+
+        $this->artisan('pz:sync-accounts')
+            ->assertSuccessful();
+
+        // Should still be only one user with this username
+        expect(User::where('username', 'taken_user')->count())->toBe(1);
+
+        DB::connection('pz_sqlite')->disconnect();
+        @unlink($dbPath);
+    });
+
+    it('detects password change from PZ and syncs to web', function () {
+        $dbPath = setupTestPzSqlite();
+
+        // User already exists with linked whitelist entry
+        $user = User::factory()->create([
+            'username' => 'sync_player',
+            'password' => Hash::make('oldpass'),
+        ]);
+        WhitelistEntry::create([
+            'user_id' => $user->id,
+            'pz_username' => 'sync_player',
+            'pz_password_hash' => 'oldpass',
+            'active' => true,
+            'synced_at' => now()->subDay(),
+        ]);
+
+        // PZ password was changed in-game
+        insertPzAccount('sync_player', 'newgamepass');
+
+        $this->artisan('pz:sync-accounts')
+            ->assertSuccessful();
+
+        $user->refresh();
+        expect(Hash::check('newgamepass', $user->password))->toBeTrue();
+
+        $entry = WhitelistEntry::where('pz_username', 'sync_player')->first();
+        expect($entry->pz_password_hash)->toBe('newgamepass');
+
+        DB::connection('pz_sqlite')->disconnect();
+        @unlink($dbPath);
+    });
+
+    it('does not update password when unchanged', function () {
+        $dbPath = setupTestPzSqlite();
+
+        $user = User::factory()->create([
+            'username' => 'stable_player',
+            'password' => Hash::make('samepass'),
+        ]);
+        $syncedAt = now()->subDay();
+        WhitelistEntry::create([
+            'user_id' => $user->id,
+            'pz_username' => 'stable_player',
+            'pz_password_hash' => 'samepass',
+            'active' => true,
+            'synced_at' => $syncedAt,
+        ]);
+
+        insertPzAccount('stable_player', 'samepass');
+
+        $this->artisan('pz:sync-accounts')
+            ->assertSuccessful();
+
+        $entry = WhitelistEntry::where('pz_username', 'stable_player')->first();
+        // synced_at should NOT have changed since password is the same
+        expect($entry->synced_at->toDateTimeString())->toBe($syncedAt->toDateTimeString());
+
+        DB::connection('pz_sqlite')->disconnect();
+        @unlink($dbPath);
+    });
+
+    it('handles multiple PZ accounts in one sync run', function () {
+        $dbPath = setupTestPzSqlite();
+        insertPzAccount('player_one', 'pass1');
+        insertPzAccount('player_two', 'pass2');
+        insertPzAccount('player_three', 'pass3');
+
+        $this->artisan('pz:sync-accounts')
+            ->assertSuccessful()
+            ->expectsOutputToContain('3 created');
+
+        expect(User::whereIn('username', ['player_one', 'player_two', 'player_three'])->count())->toBe(3);
+
+        DB::connection('pz_sqlite')->disconnect();
+        @unlink($dbPath);
+    });
+});
+
+describe('Password sync to PZ SQLite', function () {
+    it('syncs web password change to PZ SQLite', function () {
+        $dbPath = setupTestPzSqlite();
+        insertPzAccount('pw_sync_user', 'original');
+
+        $user = User::factory()->create(['username' => 'pw_sync_user']);
+        WhitelistEntry::create([
+            'user_id' => $user->id,
+            'pz_username' => 'pw_sync_user',
+            'pz_password_hash' => 'original',
+            'active' => true,
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->from(route('user-password.edit'))
+            ->put(route('user-password.update'), [
+                'current_password' => 'password',
+                'password' => 'newsecret',
+                'password_confirmation' => 'newsecret',
+            ]);
+
+        // Verify PostgreSQL password updated
+        $user->refresh();
+        expect(Hash::check('newsecret', $user->password))->toBeTrue();
+
+        // Verify PZ SQLite password updated (plain text)
+        $pzAccount = DB::connection('pz_sqlite')
+            ->table('whitelist')
+            ->where('username', 'pw_sync_user')
+            ->first();
+        expect($pzAccount->password)->toBe('newsecret');
+
+        // Verify WhitelistEntry tracking updated
+        $entry = WhitelistEntry::where('pz_username', 'pw_sync_user')->first();
+        expect($entry->pz_password_hash)->toBe('newsecret');
+
+        DB::connection('pz_sqlite')->disconnect();
+        @unlink($dbPath);
+    });
+
+    it('updates PostgreSQL even when PZ SQLite is unavailable', function () {
+        $user = User::factory()->create(['username' => 'offline_user']);
+
+        $this->actingAs($user)
+            ->from(route('user-password.edit'))
+            ->put(route('user-password.update'), [
+                'current_password' => 'password',
+                'password' => 'newpass',
+                'password_confirmation' => 'newpass',
+            ])
+            ->assertSessionHasNoErrors();
+
+        // PostgreSQL password should still be updated
+        $user->refresh();
+        expect(Hash::check('newpass', $user->password))->toBeTrue();
     });
 });
