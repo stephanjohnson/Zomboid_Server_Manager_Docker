@@ -698,6 +698,9 @@ View and manage player inventories with item icons via the Lua bridge.
 - Loading skeletons for deferred props
 - Quick-action cards on dashboard (restart, save, player count, mod count)
 - Error boundary pages (404, 500, maintenance)
+- **In-game time & weather widget** — display current PZ game time and weather conditions (temperature, rain, fog) on the dashboard via Lua bridge export (`getGameTime()`, `getClimateManager()`)
+- **Player leaderboards / top charts** — time survived, zombie kills, deaths, hours played sourced from `players.db` → `networkPlayers` table (no mod needed, direct SQLite read)
+- **Player stats cards** — individual player stats displayed on the players page (kills, hours, profession, skills)
 
 ### Phase 22+: Subscriptions (Stage 5 — Monetization)
 
@@ -830,9 +833,9 @@ php artisan scribe:generate
 | Phase 15 — RCON Console + Live Logs | DONE | RCON console, live log viewer, server start/stop/restart/save controls, 11 new tests |
 | Phase 16 — Player Registration + PZ Sync | TODO | Web registration → auto PZ account, password sync, player portal |
 | Phase 17 — Config Page UX Overhaul | TODO | Smart inputs (toggles, selects, numbers), grouped collapsible sections, descriptions |
-| Phase 18 — PZ Lua Bridge Mod | TODO | Server-side Lua mod: inventory snapshots, delivery queue, position tracking via shared volume |
+| Phase 18 — PZ Lua Bridge Mod | DONE | Server-side Lua mod: inventory snapshots, delivery queue, position tracking via shared volume |
 | Phase 19 — Admin Player Map | TODO | Leaflet.js map, player markers (online/offline/dead), players.db SQLite connection |
 | Phase 20 — Admin Inventory Management | TODO | Inventory grid with item icons, give/remove items via delivery queue, audit logged |
-| Phase 21 — Dashboard & UX Polish | TODO | Mobile responsive, toasts, skeletons, error boundaries |
+| Phase 21 — Dashboard & UX Polish | TODO | Mobile responsive, toasts, skeletons, error boundaries, in-game time/weather widget, player leaderboards, player stats |
 | Phase 22+ — Subscriptions | TODO | Cashier/Stripe (deferred — monetization) |
 | Phase 23+ — Item Shop | TODO | Shop CRUD, payments, reuses Lua bridge delivery queue (deferred — monetization) |
