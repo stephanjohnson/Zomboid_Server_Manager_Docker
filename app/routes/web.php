@@ -47,6 +47,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Audit Log
         Route::get('audit', [Admin\AuditController::class, 'index'])->name('audit');
+
+        // RCON Console
+        Route::get('rcon', [Admin\RconController::class, 'index'])->name('rcon');
+        Route::post('rcon', [Admin\RconController::class, 'execute'])->name('rcon.execute');
+
+        // Server Logs
+        Route::get('logs', [Admin\LogController::class, 'index'])->name('logs');
+        Route::get('logs/fetch', [Admin\LogController::class, 'fetch'])->name('logs.fetch');
+
+        // Server Control
+        Route::post('server/start', [Admin\ServerController::class, 'start'])->name('server.start');
+        Route::post('server/stop', [Admin\ServerController::class, 'stop'])->name('server.stop');
+        Route::post('server/restart', [Admin\ServerController::class, 'restart'])->name('server.restart');
+        Route::post('server/save', [Admin\ServerController::class, 'save'])->name('server.save');
     });
 });
 

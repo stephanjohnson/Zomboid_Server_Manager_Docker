@@ -1,17 +1,22 @@
-import { Head, usePoll } from '@inertiajs/react';
+import { Head, router, usePoll } from '@inertiajs/react';
 import {
     Archive,
     Circle,
-    Clock,
     HardDrive,
     Map,
+    Play,
+    Power,
+    RefreshCw,
+    Save,
     ScrollText,
+    Square,
     Users,
 } from 'lucide-react';
+import { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import type { BreadcrumbItem, DashboardData } from '@/types';
 import { dashboard } from '@/routes';
 
@@ -27,25 +32,84 @@ export default function Dashboard({
     recent_audit,
     backup_summary,
 }: DashboardData) {
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+
     usePoll(5000, { only: ['server'] });
+
+    const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+
+    function serverAction(action: string) {
+        setActionLoading(action);
+        fetch(`/admin/server/${action}`, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken },
+        }).finally(() => {
+            setActionLoading(null);
+            setTimeout(() => router.reload({ only: ['server'] }), 2000);
+        });
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4 lg:p-6">
                 {/* Server Status Banner */}
-                <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-4">
-                    <Circle
-                        className={`size-4 fill-current ${server.online ? 'text-green-500' : 'text-red-500'}`}
-                    />
-                    <div>
-                        <span className="font-semibold">
-                            Server {server.online ? 'Online' : 'Offline'}
-                        </span>
-                        {server.online && server.uptime && (
-                            <span className="ml-2 text-sm text-muted-foreground">
-                                Uptime: {server.uptime}
+                <div className="flex items-center justify-between rounded-lg border border-border/50 bg-card p-4">
+                    <div className="flex items-center gap-3">
+                        <Circle
+                            className={`size-4 fill-current ${server.online ? 'text-green-500' : 'text-red-500'}`}
+                        />
+                        <div>
+                            <span className="font-semibold">
+                                Server {server.online ? 'Online' : 'Offline'}
                             </span>
+                            {server.online && server.uptime && (
+                                <span className="ml-2 text-sm text-muted-foreground">
+                                    Uptime: {server.uptime}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {server.online ? (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={actionLoading !== null}
+                                    onClick={() => serverAction('save')}
+                                >
+                                    <Save className="mr-1.5 size-3.5" />
+                                    Save
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={actionLoading !== null}
+                                    onClick={() => serverAction('restart')}
+                                >
+                                    <RefreshCw className="mr-1.5 size-3.5" />
+                                    Restart
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={actionLoading !== null}
+                                    onClick={() => serverAction('stop')}
+                                >
+                                    <Square className="mr-1.5 size-3.5" />
+                                    Stop
+                                </Button>
+                            </>
+                        ) : (
+                            <Button
+                                size="sm"
+                                disabled={actionLoading !== null}
+                                onClick={() => serverAction('start')}
+                            >
+                                <Play className="mr-1.5 size-3.5" />
+                                Start
+                            </Button>
                         )}
                     </div>
                 </div>

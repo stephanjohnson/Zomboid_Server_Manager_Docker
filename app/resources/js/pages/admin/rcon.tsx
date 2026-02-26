@@ -1,0 +1,171 @@
+import { Head } from '@inertiajs/react';
+import { Send, Terminal } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import AppLayout from '@/layouts/app-layout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import type { BreadcrumbItem } from '@/types';
+
+type HistoryEntry = {
+    type: 'command' | 'response' | 'error';
+    text: string;
+    timestamp: string;
+};
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Dashboard', href: '/dashboard' },
+    { title: 'RCON Console', href: '/admin/rcon' },
+];
+
+export default function Rcon() {
+    const [command, setCommand] = useState('');
+    const [history, setHistory] = useState<HistoryEntry[]>([]);
+    const [commandHistory, setCommandHistory] = useState<string[]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+    const [loading, setLoading] = useState(false);
+    const outputRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+
+    useEffect(() => {
+        if (outputRef.current) {
+            outputRef.current.scrollTop = outputRef.current.scrollHeight;
+        }
+    }, [history]);
+
+    function addEntry(type: HistoryEntry['type'], text: string) {
+        setHistory((prev) => [...prev, { type, text, timestamp: new Date().toLocaleTimeString() }]);
+    }
+
+    function executeCommand() {
+        if (!command.trim() || loading) return;
+
+        const cmd = command.trim();
+        addEntry('command', cmd);
+        setCommandHistory((prev) => [cmd, ...prev]);
+        setHistoryIndex(-1);
+        setCommand('');
+        setLoading(true);
+
+        fetch('/admin/rcon', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ command: cmd }),
+        })
+            .then((r) => r.json())
+            .then((data) => {
+                if (data.error) {
+                    addEntry('error', data.error);
+                } else {
+                    addEntry('response', data.response || '(no output)');
+                }
+            })
+            .catch((err) => {
+                addEntry('error', `Request failed: ${err.message}`);
+            })
+            .finally(() => setLoading(false));
+    }
+
+    function handleKeyDown(e: React.KeyboardEvent) {
+        if (e.key === 'Enter') {
+            executeCommand();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (commandHistory.length > 0) {
+                const newIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
+                setHistoryIndex(newIndex);
+                setCommand(commandHistory[newIndex]);
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (historyIndex > 0) {
+                const newIndex = historyIndex - 1;
+                setHistoryIndex(newIndex);
+                setCommand(commandHistory[newIndex]);
+            } else {
+                setHistoryIndex(-1);
+                setCommand('');
+            }
+        }
+    }
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="RCON Console" />
+            <div className="flex flex-1 flex-col gap-6 p-4 lg:p-6">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">RCON Console</h1>
+                    <p className="text-muted-foreground">
+                        Execute RCON commands directly on the game server
+                    </p>
+                </div>
+
+                <Card className="flex flex-1 flex-col">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Terminal className="size-5" />
+                            Console
+                        </CardTitle>
+                        <CardDescription>
+                            Commands: players, save, quit, kickuser, banuser, setaccesslevel, servermsg, additem, addxp, godmod, teleport
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-1 flex-col">
+                        {/* Output */}
+                        <div
+                            ref={outputRef}
+                            className="flex-1 overflow-auto rounded-t-lg bg-zinc-950 p-4 font-mono text-sm min-h-[400px]"
+                        >
+                            {history.length === 0 ? (
+                                <p className="text-zinc-500">
+                                    Type a command below and press Enter...
+                                </p>
+                            ) : (
+                                history.map((entry, i) => (
+                                    <div key={i} className="mb-1">
+                                        <span className="text-zinc-500 text-xs mr-2">[{entry.timestamp}]</span>
+                                        {entry.type === 'command' && (
+                                            <span className="text-green-400">&gt; {entry.text}</span>
+                                        )}
+                                        {entry.type === 'response' && (
+                                            <span className="whitespace-pre-wrap text-zinc-300">{entry.text}</span>
+                                        )}
+                                        {entry.type === 'error' && (
+                                            <span className="text-red-400">{entry.text}</span>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                            {loading && (
+                                <div className="text-zinc-500 animate-pulse">Executing...</div>
+                            )}
+                        </div>
+
+                        {/* Input */}
+                        <div className="flex gap-2 rounded-b-lg border-t border-zinc-800 bg-zinc-950 p-2">
+                            <Input
+                                ref={inputRef}
+                                value={command}
+                                onChange={(e) => setCommand(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Enter RCON command..."
+                                className="border-zinc-700 bg-zinc-900 font-mono text-sm text-zinc-100 placeholder:text-zinc-600"
+                                disabled={loading}
+                                autoFocus
+                            />
+                            <Button
+                                size="sm"
+                                onClick={executeCommand}
+                                disabled={loading || !command.trim()}
+                            >
+                                <Send className="size-4" />
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </AppLayout>
+    );
+}
