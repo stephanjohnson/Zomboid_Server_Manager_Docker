@@ -28,6 +28,12 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         Route::post('players/{name}/ban', [Admin\PlayerController::class, 'ban'])->name('players.ban');
         Route::post('players/{name}/access', [Admin\PlayerController::class, 'setAccessLevel'])->name('players.access');
 
+        // Player Inventory
+        Route::get('players/{username}/inventory', [Admin\InventoryController::class, 'show'])->name('players.inventory');
+        Route::post('players/{username}/inventory/give', [Admin\InventoryController::class, 'giveItem'])->name('players.inventory.give');
+        Route::post('players/{username}/inventory/remove', [Admin\InventoryController::class, 'removeItem'])->name('players.inventory.remove');
+        Route::get('players/{username}/inventory/status', [Admin\InventoryController::class, 'deliveryStatus'])->name('players.inventory.status');
+
         // Map Tiles
         Route::get('map-tiles/{level}/{tile}', [Admin\PlayerMapController::class, 'tile'])->name('map.tile')->where('tile', '.*');
 
