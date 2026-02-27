@@ -837,6 +837,6 @@ php artisan scribe:generate
 | Phase 18 — PZ Lua Bridge Mod | DONE | Server-side Lua mod: inventory snapshots, delivery queue, position tracking via shared volume |
 | Phase 19 — Admin Player Map | DONE | Leaflet.js map with PZ tile rendering, player markers (online/offline/dead), action dialogs (kick/ban/access), usePoll 5s live updates, players.db SQLite connection |
 | Phase 20 — Admin Inventory Management | DONE | Inventory grid with item icons, give/remove dialogs, delivery queue integration, audit logged, 17 tests |
-| Phase 21 — Dashboard & UX Polish | TODO | Mobile responsive, toasts, skeletons, error boundaries, in-game time/weather widget, player leaderboards, player stats, Log Extender event ingestion |
+| Phase 21 — Dashboard & UX Polish | DONE | Toast notifications (Sonner), error handling, deferred props with skeletons, game time/weather widget (Lua export), player stats/leaderboards (Lua export), Log Extender event ingestion, activity feed, mobile responsive polish, 23 new tests |
 | Phase 22+ — Subscriptions | TODO | Cashier/Stripe (deferred — monetization) |
 | Phase 23+ — Item Shop | TODO | Shop CRUD, payments, reuses Lua bridge delivery queue (deferred — monetization) |
