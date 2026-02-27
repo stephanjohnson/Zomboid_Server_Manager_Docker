@@ -79,7 +79,7 @@ export default function Players({ players, registeredUsers }: { players: Player[
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Player Management</h1>
                         <p className="text-muted-foreground">
-                            {players.length} online, {registeredUsers.length} registered
+                            {players.length} online{registeredUsers ? `, ${registeredUsers.length} registered` : ''}
                         </p>
                     </div>
                     <Badge variant="outline" className="text-sm">
