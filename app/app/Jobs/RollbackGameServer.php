@@ -7,6 +7,7 @@ use App\Services\AuditLogger;
 use App\Services\BackupManager;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 
 class RollbackGameServer implements ShouldQueue
 {
@@ -21,6 +22,8 @@ class RollbackGameServer implements ShouldQueue
 
     public function handle(BackupManager $backupManager): void
     {
+        Cache::forget('server.pending_action:rollback');
+
         $backup = Backup::findOrFail($this->backupId);
 
         $result = $backupManager->rollback($backup);

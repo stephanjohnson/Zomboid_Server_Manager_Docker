@@ -7,6 +7,7 @@ use App\Services\DockerManager;
 use App\Services\RconClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class StopGameServer implements ShouldQueue
@@ -21,6 +22,8 @@ class StopGameServer implements ShouldQueue
 
     public function handle(RconClient $rcon, DockerManager $docker): void
     {
+        Cache::forget('server.pending_action:stop');
+
         try {
             $rcon->connect();
             $rcon->command('save');

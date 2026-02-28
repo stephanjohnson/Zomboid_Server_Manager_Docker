@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\RestartServerRequest;
 use App\Http\Requests\Admin\StopServerRequest;
 use App\Jobs\RestartGameServer;
+use App\Jobs\SendServerWarning;
 use App\Jobs\StopGameServer;
+use App\Jobs\WaitForServerReady;
 use App\Services\AuditLogger;
 use App\Services\DockerManager;
 use App\Services\RconClient;
@@ -46,6 +48,12 @@ class ServerController extends Controller
             ip: $request->ip(),
         );
 
+        WaitForServerReady::dispatch(
+            'server.start.completed',
+            $request->user()->name ?? 'admin',
+            $request->ip(),
+        );
+
         return response()->json(['message' => 'Server starting']);
     }
 
@@ -66,6 +74,8 @@ class ServerController extends Controller
 
             StopGameServer::dispatch($request->ip())
                 ->delay(now()->addSeconds($countdown));
+
+            SendServerWarning::dispatchCountdownWarnings($countdown, 'shutting down', 'server.pending_action:stop');
 
             $this->auditLogger->log(
                 actor: $request->user()->name ?? 'admin',
@@ -122,6 +132,8 @@ class ServerController extends Controller
             RestartGameServer::dispatch($request->ip())
                 ->delay(now()->addSeconds($countdown));
 
+            SendServerWarning::dispatchCountdownWarnings($countdown, 'restarting', 'server.pending_action:restart');
+
             $this->auditLogger->log(
                 actor: $request->user()->name ?? 'admin',
                 action: 'server.restart.scheduled',
@@ -156,10 +168,10 @@ class ServerController extends Controller
 
             $docker->restartContainer(timeout: 30);
 
-            AuditLogger::record(
-                actor: $actor,
-                action: 'server.restart.completed',
-                ip: $ip,
+            WaitForServerReady::dispatch(
+                'server.restart.completed',
+                $actor,
+                $ip,
             );
         });
 

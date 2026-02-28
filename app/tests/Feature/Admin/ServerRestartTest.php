@@ -2,6 +2,8 @@
 
 use App\Enums\UserRole;
 use App\Jobs\RestartGameServer;
+use App\Jobs\SendServerWarning;
+use App\Jobs\WaitForServerReady;
 use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\DockerManager;
@@ -28,6 +30,8 @@ beforeEach(function () {
 // ── Immediate restart ────────────────────────────────────────────────
 
 it('performs immediate restart when no countdown is provided', function () {
+    Queue::fake();
+
     $rcon = Mockery::mock(RconClient::class);
     $rcon->shouldReceive('connect')->andReturnNull()->byDefault();
     $rcon->shouldReceive('command')->with('save')->andReturnNull()->byDefault();
@@ -39,6 +43,7 @@ it('performs immediate restart when no countdown is provided', function () {
         ->assertJson(['message' => 'Server restarting']);
 
     expect(AuditLog::where('action', 'server.restart')->exists())->toBeTrue();
+    Queue::assertPushed(WaitForServerReady::class);
 });
 
 // ── Scheduled restart ────────────────────────────────────────────────
@@ -65,6 +70,7 @@ it('schedules restart with countdown and broadcasts RCON warning', function () {
         ]);
 
     Queue::assertPushed(RestartGameServer::class);
+    Queue::assertPushed(SendServerWarning::class, 1); // 30s threshold
     expect(AuditLog::where('action', 'server.restart.scheduled')->exists())->toBeTrue();
 });
 

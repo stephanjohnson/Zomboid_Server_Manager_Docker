@@ -6,6 +6,7 @@ use App\Http\Requests\Api\BroadcastRequest;
 use App\Http\Requests\Api\RestartServerRequest;
 use App\Http\Requests\Api\ServerLogsRequest;
 use App\Jobs\RestartGameServer;
+use App\Jobs\SendServerWarning;
 use App\Services\AuditLogger;
 use App\Services\DockerManager;
 use App\Services\RconClient;
@@ -131,6 +132,8 @@ class ServerController
 
             RestartGameServer::dispatch($request->ip())
                 ->delay(now()->addSeconds($countdown));
+
+            SendServerWarning::dispatchCountdownWarnings($countdown, 'restarting', 'server.pending_action:restart');
 
             return response()->json([
                 'message' => "Server restart scheduled in {$countdown} seconds",

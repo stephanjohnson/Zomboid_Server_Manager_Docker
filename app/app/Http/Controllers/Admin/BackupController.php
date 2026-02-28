@@ -6,6 +6,7 @@ use App\Enums\BackupType;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BackupResource;
 use App\Jobs\RollbackGameServer;
+use App\Jobs\SendServerWarning;
 use App\Models\Backup;
 use App\Services\AuditLogger;
 use App\Services\BackupManager;
@@ -116,6 +117,8 @@ class BackupController extends Controller
 
             RollbackGameServer::dispatch($backup->id, $request->ip())
                 ->delay(now()->addSeconds($countdown));
+
+            SendServerWarning::dispatchCountdownWarnings($countdown, 'rolling back', 'server.pending_action:rollback');
 
             $this->auditLogger->log(
                 actor: $request->user()->name ?? 'admin',

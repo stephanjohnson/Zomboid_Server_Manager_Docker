@@ -7,6 +7,7 @@ use App\Services\DockerManager;
 use App\Services\RconClient;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class RestartGameServer implements ShouldQueue
@@ -21,6 +22,8 @@ class RestartGameServer implements ShouldQueue
 
     public function handle(RconClient $rcon, DockerManager $docker): void
     {
+        Cache::forget('server.pending_action:restart');
+
         try {
             $rcon->connect();
             $rcon->command('save');
@@ -42,12 +45,10 @@ class RestartGameServer implements ShouldQueue
 
         $docker->restartContainer(timeout: 30);
 
-        AuditLogger::record(
-            actor: 'system',
-            action: 'server.restart.completed',
-            target: config('zomboid.docker.container_name'),
-            details: ['source' => 'scheduled_job'],
-            ip: $this->ip,
+        WaitForServerReady::dispatch(
+            'server.restart.completed',
+            'system',
+            $this->ip,
         );
     }
 }
