@@ -19,16 +19,26 @@ export async function fetchAction(
     const csrfToken =
         document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
 
+    // Laravel method spoofing: send PUT/PATCH/DELETE as POST with _method in body
+    const spoofed = ['PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase());
+    const actualMethod = spoofed ? 'POST' : method;
+
+    const body = data
+        ? JSON.stringify(spoofed ? { ...data, _method: method } : data)
+        : spoofed
+            ? JSON.stringify({ _method: method })
+            : undefined;
+
     const headers: Record<string, string> = { 'X-CSRF-TOKEN': csrfToken };
-    if (data) {
+    if (body) {
         headers['Content-Type'] = 'application/json';
     }
 
     try {
         const res = await fetch(url, {
-            method,
+            method: actualMethod,
             headers,
-            body: data ? JSON.stringify(data) : undefined,
+            body,
         });
 
         const json = await res.json().catch(() => ({}));
