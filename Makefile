@@ -7,7 +7,7 @@ endif
 
 COMPOSE := docker compose -f docker-compose.yml -f $(ARCH_FILE)
 
-.PHONY: up down build restart logs ps stop pull migrate test exec arch init db-check db-init db-reset db-backup db-restore nuke
+.PHONY: up down build restart logs ps stop pull migrate test exec arch init prod-init db-check db-init db-reset db-backup db-restore nuke
 
 # ── First-run setup ──────────────────────────────────────────────────
 # Generates .env with random secrets from .env.example template
@@ -33,6 +33,47 @@ init:
 		echo "  Edit .env to customize server settings before starting"; \
 		echo ""; \
 	fi
+
+# ── Production setup ─────────────────────────────────────────────────
+# Generates both .env and app/.env from production templates with
+# strong random secrets. Shared values (passwords, keys) stay in sync.
+prod-init:
+	@if [ -f .env ] && [ -f app/.env ]; then \
+		echo "Both .env and app/.env already exist — skipping."; \
+		echo "Delete them to regenerate: rm .env app/.env"; \
+		exit 0; \
+	fi
+	@echo "Generating production .env files with random secrets..."
+	@DB_PASS=$$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 24); \
+	RCON_PASS=$$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 16); \
+	ADMIN_PASS=$$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 16); \
+	API_SECRET=$$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 48); \
+	APP_SECRET=$$(openssl rand -base64 32); \
+	REDIS_PASS=$$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 20); \
+	sed \
+		-e "s|^DB_PASSWORD=.*|DB_PASSWORD=$$DB_PASS|" \
+		-e "s|^PZ_RCON_PASSWORD=.*|PZ_RCON_PASSWORD=$$RCON_PASS|" \
+		-e "s|^PZ_ADMIN_PASSWORD=.*|PZ_ADMIN_PASSWORD=$$ADMIN_PASS|" \
+		-e "s|^API_KEY=.*|API_KEY=$$API_SECRET|" \
+		-e "s|^APP_KEY=.*|APP_KEY=base64:$$APP_SECRET|" \
+		-e "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$$REDIS_PASS|" \
+		.env.production.example > .env; \
+	sed \
+		-e "s|^DB_PASSWORD=.*|DB_PASSWORD=$$DB_PASS|" \
+		-e "s|^PZ_RCON_PASSWORD=.*|PZ_RCON_PASSWORD=$$RCON_PASS|" \
+		-e "s|^PZ_ADMIN_PASSWORD=.*|PZ_ADMIN_PASSWORD=$$ADMIN_PASS|" \
+		-e "s|^API_KEY=.*|API_KEY=$$API_SECRET|" \
+		-e "s|^APP_KEY=.*|APP_KEY=base64:$$APP_SECRET|" \
+		-e "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$$REDIS_PASS|" \
+		app/.env.production.example > app/.env; \
+	echo ""; \
+	echo "  .env and app/.env created with production secrets"; \
+	echo ""; \
+	echo "  BEFORE STARTING, edit .env and set:"; \
+	echo "    APP_URL=http://<your-server-ip>:8000"; \
+	echo ""; \
+	echo "  Then run: make db-init && make up"; \
+	echo ""
 
 db-check:
 	@docker volume inspect pz-postgres >/dev/null 2>&1 || \
