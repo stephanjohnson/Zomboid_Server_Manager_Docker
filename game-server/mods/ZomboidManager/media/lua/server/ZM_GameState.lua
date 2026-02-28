@@ -60,6 +60,48 @@ function ZM_GameState.export()
         season = getSeason(month),
     }
 
+    -- Climate data (may not be available during early startup)
+    local okCM, cm = pcall(getClimateManager)
+    if okCM and cm then
+        local okTemp, temp = pcall(function() return cm:getTemperature() end)
+        local okRain, rain = pcall(function() return cm:getRainIntensity() end)
+        local okFog, fog = pcall(function() return cm:getFogIntensity() end)
+        local okWind, wind = pcall(function() return cm:getWindIntensity() end)
+        local okSnow, snow = pcall(function() return cm:getSnowIntensity() end)
+
+        if not okTemp then temp = 0 end
+        if not okRain then rain = 0 end
+        if not okFog then fog = 0 end
+        if not okWind then wind = 0 end
+        if not okSnow then snow = 0 end
+
+        state.weather = {
+            temperature = math.floor(temp * 10 + 0.5) / 10,
+            rain_intensity = math.floor(rain * 100 + 0.5) / 100,
+            fog_intensity = math.floor(fog * 100 + 0.5) / 100,
+            wind_intensity = math.floor(wind * 100 + 0.5) / 100,
+            snow_intensity = math.floor(snow * 100 + 0.5) / 100,
+            is_raining = rain > 0.1,
+            is_foggy = fog > 0.2,
+            is_snowing = snow > 0.1,
+        }
+
+        -- Determine primary weather condition
+        if snow > 0.1 then
+            state.weather.condition = "snow"
+        elseif rain > 0.5 then
+            state.weather.condition = "heavy_rain"
+        elseif rain > 0.1 then
+            state.weather.condition = "rain"
+        elseif fog > 0.3 then
+            state.weather.condition = "fog"
+        elseif isNight then
+            state.weather.condition = "night"
+        else
+            state.weather.condition = "clear"
+        end
+    end
+
     local okT, now = pcall(os.time)
     if okT then
         state.exported_at = os.date("!%Y-%m-%dT%H:%M:%SZ", now)
