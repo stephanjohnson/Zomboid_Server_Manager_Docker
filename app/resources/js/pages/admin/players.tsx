@@ -1,19 +1,11 @@
-import { Deferred, Head, Link, router, usePoll } from '@inertiajs/react';
-import { Backpack, Ban, Circle, Clock, ShieldCheck, Skull, UserX } from 'lucide-react';
-import { useState } from 'react';
+import { Head, Link, usePoll } from '@inertiajs/react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Backpack, Ban, Circle, Clock, Search, ShieldCheck, Skull, UserX } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import PlayerActionDialogs from '@/components/player-action-dialogs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -21,25 +13,26 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
-import { fetchAction } from '@/lib/fetch-action';
 import type { BreadcrumbItem } from '@/types';
 
-type Player = { name: string };
-
-type RegisteredUser = {
-    id: number;
+type Player = {
+    id: number | null;
     username: string;
     role: string;
     isOnline: boolean;
-    createdAt: string;
+    createdAt: string | null;
     stats: {
         zombie_kills: number;
         hours_survived: number;
         profession: string | null;
     } | null;
 };
+
+type SortKey = 'status' | 'username' | 'kills' | 'hours' | 'joined';
+type SortDir = 'asc' | 'desc';
+type StatusFilter = 'all' | 'online' | 'offline';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -51,25 +44,74 @@ const roleBadgeVariant: Record<string, 'default' | 'secondary' | 'outline'> = {
     admin: 'default',
     moderator: 'secondary',
     player: 'outline',
+    unknown: 'outline',
 };
 
-export default function Players({ players, registeredUsers }: { players: Player[]; registeredUsers: RegisteredUser[] }) {
+export default function Players({ players }: { players: Player[] }) {
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    const [sortKey, setSortKey] = useState<SortKey>('status');
+    const [sortDir, setSortDir] = useState<SortDir>('desc');
+
     const [kickTarget, setKickTarget] = useState<string | null>(null);
     const [banTarget, setBanTarget] = useState<string | null>(null);
     const [accessTarget, setAccessTarget] = useState<string | null>(null);
-    const [reason, setReason] = useState('');
-    const [accessLevel, setAccessLevel] = useState('none');
-    const [loading, setLoading] = useState(false);
 
-    usePoll(5000, { only: ['players', 'registeredUsers'] });
+    usePoll(5000, { only: ['players'] });
 
-    async function handleAction(url: string, data: Record<string, unknown>, onDone: () => void) {
-        setLoading(true);
-        await fetchAction(url, { data });
-        setLoading(false);
-        onDone();
-        router.reload({ only: ['players', 'registeredUsers'] });
+    const onlineCount = useMemo(() => players.filter((p) => p.isOnline).length, [players]);
+
+    function toggleSort(key: SortKey) {
+        if (sortKey === key) {
+            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortKey(key);
+            setSortDir('asc');
+        }
     }
+
+    function SortIcon({ column }: { column: SortKey }) {
+        if (sortKey !== column) return <ArrowUpDown className="ml-1 inline size-3 text-muted-foreground/50" />;
+        return sortDir === 'asc'
+            ? <ArrowUp className="ml-1 inline size-3" />
+            : <ArrowDown className="ml-1 inline size-3" />;
+    }
+
+    const filteredPlayers = useMemo(() => {
+        let result = players;
+
+        if (statusFilter === 'online') {
+            result = result.filter((p) => p.isOnline);
+        } else if (statusFilter === 'offline') {
+            result = result.filter((p) => !p.isOnline);
+        }
+
+        if (search) {
+            const q = search.toLowerCase();
+            result = result.filter((p) => p.username.toLowerCase().includes(q));
+        }
+
+        const sorted = [...result];
+        sorted.sort((a, b) => {
+            let cmp = 0;
+            if (sortKey === 'status') {
+                cmp = Number(a.isOnline) - Number(b.isOnline);
+            } else if (sortKey === 'username') {
+                cmp = a.username.localeCompare(b.username);
+            } else if (sortKey === 'kills') {
+                cmp = (a.stats?.zombie_kills ?? 0) - (b.stats?.zombie_kills ?? 0);
+            } else if (sortKey === 'hours') {
+                cmp = (a.stats?.hours_survived ?? 0) - (b.stats?.hours_survived ?? 0);
+            } else if (sortKey === 'joined') {
+                const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                cmp = aDate - bDate;
+            }
+            return sortDir === 'desc' ? -cmp : cmp;
+        });
+
+        return sorted;
+    }, [players, search, statusFilter, sortKey, sortDir]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -79,7 +121,7 @@ export default function Players({ players, registeredUsers }: { players: Player[
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">Player Management</h1>
                         <p className="text-muted-foreground">
-                            {players.length} online{registeredUsers ? `, ${registeredUsers.length} registered` : ''}
+                            {onlineCount} online, {players.length} total
                         </p>
                     </div>
                     <Badge variant="outline" className="text-sm">
@@ -90,245 +132,164 @@ export default function Players({ players, registeredUsers }: { players: Player[
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Online Players</CardTitle>
-                        <CardDescription>Currently connected to the game server</CardDescription>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <CardTitle>Players</CardTitle>
+                                <CardDescription>
+                                    {filteredPlayers.length} of {players.length} players
+                                </CardDescription>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search players..."
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        className="pl-9 sm:w-[200px]"
+                                    />
+                                </div>
+                                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                                    <SelectTrigger className="w-full sm:w-[130px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All</SelectItem>
+                                        <SelectItem value="online">Online</SelectItem>
+                                        <SelectItem value="offline">Offline</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        {players.length > 0 ? (
-                            <div className="space-y-2">
-                                {players.map((player) => (
-                                    <div
-                                        key={player.name}
-                                        className="flex flex-col gap-2 rounded-lg border border-border/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <Circle className="size-2 fill-green-500 text-green-500" />
-                                            <span className="font-medium">{player.name}</span>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <Button variant="outline" size="sm" asChild>
-                                                <Link href={`/admin/players/${player.name}/inventory`}>
-                                                    <Backpack className="mr-1.5 size-3.5" />
-                                                    Inventory
-                                                </Link>
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setAccessTarget(player.name)}
-                                            >
-                                                <ShieldCheck className="mr-1.5 size-3.5" />
-                                                Access
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setReason('');
-                                                    setKickTarget(player.name);
-                                                }}
-                                            >
-                                                <UserX className="mr-1.5 size-3.5" />
-                                                Kick
-                                            </Button>
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setReason('');
-                                                    setBanTarget(player.name);
-                                                }}
-                                            >
-                                                <Ban className="mr-1.5 size-3.5" />
-                                                Ban
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                        {filteredPlayers.length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[40px]">
+                                            <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('status')}>
+                                                <SortIcon column="status" />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('username')}>
+                                                Player
+                                                <SortIcon column="username" />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead className="hidden sm:table-cell">Role</TableHead>
+                                        <TableHead className="hidden md:table-cell">
+                                            <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('kills')}>
+                                                <Skull className="mr-1 size-3" />
+                                                Kills
+                                                <SortIcon column="kills" />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead className="hidden md:table-cell">
+                                            <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('hours')}>
+                                                <Clock className="mr-1 size-3" />
+                                                Hours
+                                                <SortIcon column="hours" />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead className="hidden lg:table-cell">
+                                            <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('joined')}>
+                                                Joined
+                                                <SortIcon column="joined" />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredPlayers.map((player) => (
+                                        <TableRow key={player.id ?? `online-${player.username}`}>
+                                            <TableCell>
+                                                <Circle
+                                                    className={`size-2 ${player.isOnline ? 'fill-green-500 text-green-500' : 'fill-muted text-muted'}`}
+                                                />
+                                            </TableCell>
+                                            <TableCell className="font-medium">{player.username}</TableCell>
+                                            <TableCell className="hidden sm:table-cell">
+                                                <Badge variant={roleBadgeVariant[player.role] ?? 'outline'}>
+                                                    {player.role.replace('_', ' ')}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="hidden tabular-nums md:table-cell">
+                                                {player.stats?.zombie_kills.toLocaleString() ?? '-'}
+                                            </TableCell>
+                                            <TableCell className="hidden tabular-nums md:table-cell">
+                                                {player.stats
+                                                    ? `${player.stats.hours_survived.toLocaleString(undefined, { maximumFractionDigits: 1 })}h`
+                                                    : '-'}
+                                            </TableCell>
+                                            <TableCell className="hidden lg:table-cell">
+                                                {player.createdAt
+                                                    ? new Date(player.createdAt).toLocaleDateString()
+                                                    : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button variant="ghost" size="sm" asChild title="Inventory">
+                                                        <Link href={`/admin/players/${player.username}/inventory`}>
+                                                            <Backpack className="size-3.5" />
+                                                        </Link>
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => setAccessTarget(player.username)}
+                                                        title="Set access level"
+                                                    >
+                                                        <ShieldCheck className="size-3.5" />
+                                                    </Button>
+                                                    {player.isOnline && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                setKickTarget(player.username);
+                                                            }}
+                                                            title="Kick player"
+                                                        >
+                                                            <UserX className="size-3.5" />
+                                                        </Button>
+                                                    )}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setBanTarget(player.username);
+                                                        }}
+                                                        title="Ban player"
+                                                    >
+                                                        <Ban className="size-3.5 text-destructive" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         ) : (
                             <p className="py-8 text-center text-muted-foreground">
-                                No players online
+                                {search || statusFilter !== 'all' ? 'No players match your filters' : 'No players'}
                             </p>
                         )}
                     </CardContent>
                 </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Registered Users</CardTitle>
-                        <CardDescription>All users registered on the platform</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Deferred data="registeredUsers" fallback={
-                            <div className="space-y-2">
-                                {Array.from({ length: 4 }).map((_, i) => (
-                                    <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 px-4 py-3">
-                                        <div className="flex items-center gap-3">
-                                            <Skeleton className="size-2 rounded-full" />
-                                            <Skeleton className="h-4 w-24" />
-                                            <Skeleton className="h-5 w-14 rounded-full" />
-                                        </div>
-                                        <Skeleton className="h-4 w-28" />
-                                    </div>
-                                ))}
-                            </div>
-                        }>
-                            {registeredUsers?.length > 0 ? (
-                                <div className="space-y-2">
-                                    {registeredUsers.map((user) => (
-                                        <div
-                                            key={user.id}
-                                            className="flex flex-col gap-2 rounded-lg border border-border/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <Circle
-                                                    className={`size-2 ${user.isOnline ? 'fill-green-500 text-green-500' : 'fill-muted text-muted'}`}
-                                                />
-                                                <span className="font-medium">{user.username}</span>
-                                                <Badge variant={roleBadgeVariant[user.role] ?? 'outline'}>
-                                                    {user.role.replace('_', ' ')}
-                                                </Badge>
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                {user.stats && (
-                                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                                        <span className="flex items-center gap-1" title="Zombie kills">
-                                                            <Skull className="size-3" />
-                                                            {user.stats.zombie_kills.toLocaleString()}
-                                                        </span>
-                                                        <span className="flex items-center gap-1" title="Hours survived">
-                                                            <Clock className="size-3" />
-                                                            {user.stats.hours_survived.toLocaleString(undefined, { maximumFractionDigits: 1 })}h
-                                                        </span>
-                                                        {user.stats.profession && (
-                                                            <span className="capitalize">{user.stats.profession}</span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                <span className="text-sm text-muted-foreground">
-                                                    Joined {new Date(user.createdAt).toLocaleDateString()}
-                                                </span>
-                                                <Button variant="ghost" size="sm" asChild>
-                                                    <Link href={`/admin/players/${user.username}/inventory`}>
-                                                        <Backpack className="size-3.5" />
-                                                    </Link>
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="py-8 text-center text-muted-foreground">
-                                    No registered users
-                                </p>
-                            )}
-                        </Deferred>
-                    </CardContent>
-                </Card>
             </div>
 
-            {/* Kick Dialog */}
-            <Dialog open={kickTarget !== null} onOpenChange={() => setKickTarget(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Kick {kickTarget}</DialogTitle>
-                        <DialogDescription>This player will be disconnected from the server.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                        <Label htmlFor="kick-reason">Reason (optional)</Label>
-                        <Input
-                            id="kick-reason"
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            placeholder="Reason for kick..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setKickTarget(null)}>Cancel</Button>
-                        <Button
-                            disabled={loading}
-                            onClick={() =>
-                                handleAction(`/admin/players/${kickTarget}/kick`, { reason }, () => setKickTarget(null))
-                            }
-                        >
-                            Kick Player
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Ban Dialog */}
-            <Dialog open={banTarget !== null} onOpenChange={() => setBanTarget(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Ban {banTarget}</DialogTitle>
-                        <DialogDescription>This player will be permanently banned from the server.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                        <Label htmlFor="ban-reason">Reason (optional)</Label>
-                        <Input
-                            id="ban-reason"
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            placeholder="Reason for ban..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setBanTarget(null)}>Cancel</Button>
-                        <Button
-                            variant="destructive"
-                            disabled={loading}
-                            onClick={() =>
-                                handleAction(`/admin/players/${banTarget}/ban`, { reason }, () => setBanTarget(null))
-                            }
-                        >
-                            Ban Player
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Access Level Dialog */}
-            <Dialog open={accessTarget !== null} onOpenChange={() => setAccessTarget(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Set Access Level for {accessTarget}</DialogTitle>
-                        <DialogDescription>Change the player's server access level.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                        <Label>Access Level</Label>
-                        <Select value={accessLevel} onValueChange={setAccessLevel}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="moderator">Moderator</SelectItem>
-                                <SelectItem value="overseer">Overseer</SelectItem>
-                                <SelectItem value="gm">GM</SelectItem>
-                                <SelectItem value="observer">Observer</SelectItem>
-                                <SelectItem value="none">None</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setAccessTarget(null)}>Cancel</Button>
-                        <Button
-                            disabled={loading}
-                            onClick={() =>
-                                handleAction(
-                                    `/admin/players/${accessTarget}/access`,
-                                    { level: accessLevel },
-                                    () => setAccessTarget(null),
-                                )
-                            }
-                        >
-                            Set Access
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <PlayerActionDialogs
+                kickTarget={kickTarget}
+                banTarget={banTarget}
+                accessTarget={accessTarget}
+                onCloseKick={() => setKickTarget(null)}
+                onCloseBan={() => setBanTarget(null)}
+                onCloseAccess={() => setAccessTarget(null)}
+                reloadOnly={['players']}
+            />
         </AppLayout>
     );
 }

@@ -1,29 +1,11 @@
 import { Head, router, usePoll } from '@inertiajs/react';
-import { AlertTriangle, Ban, Circle, Loader2, ShieldCheck, UserX } from 'lucide-react';
+import { AlertTriangle, Circle, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import PlayerActionDialogs from '@/components/player-action-dialogs';
 import PzMap from '@/components/pz-map';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { fetchAction } from '@/lib/fetch-action';
 import type { BreadcrumbItem } from '@/types';
 import type { MapConfig, PlayerMarker } from '@/types/server';
 
@@ -61,9 +43,6 @@ export default function PlayerMap({ markers, onlineCount, serverStatus, mapConfi
     const [kickTarget, setKickTarget] = useState<string | null>(null);
     const [banTarget, setBanTarget] = useState<string | null>(null);
     const [accessTarget, setAccessTarget] = useState<string | null>(null);
-    const [reason, setReason] = useState('');
-    const [accessLevel, setAccessLevel] = useState('none');
-    const [loading, setLoading] = useState(false);
 
     const counts = useMemo(() => {
         const online = Math.max(onlineCount, markers.filter((m) => m.status === 'online').length);
@@ -72,26 +51,15 @@ export default function PlayerMap({ markers, onlineCount, serverStatus, mapConfi
         return { online, offline, dead, total: markers.length };
     }, [markers, onlineCount]);
 
-    async function handleAction(url: string, data: Record<string, unknown>, onDone: () => void) {
-        setLoading(true);
-        await fetchAction(url, { data });
-        setLoading(false);
-        onDone();
-        router.reload({ only: ['markers'] });
-    }
-
     function handleMarkerAction(marker: PlayerMarker, action: string) {
         switch (action) {
             case 'kick':
-                setReason('');
                 setKickTarget(marker.username);
                 break;
             case 'ban':
-                setReason('');
                 setBanTarget(marker.username);
                 break;
             case 'access':
-                setAccessLevel('none');
                 setAccessTarget(marker.username);
                 break;
             case 'inventory':
@@ -209,110 +177,15 @@ export default function PlayerMap({ markers, onlineCount, serverStatus, mapConfi
                 )}
             </div>
 
-            {/* Kick Dialog */}
-            <Dialog open={kickTarget !== null} onOpenChange={() => setKickTarget(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Kick {kickTarget}</DialogTitle>
-                        <DialogDescription>This player will be disconnected from the server.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                        <Label htmlFor="map-kick-reason">Reason (optional)</Label>
-                        <Input
-                            id="map-kick-reason"
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            placeholder="Reason for kick..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setKickTarget(null)}>Cancel</Button>
-                        <Button
-                            disabled={loading}
-                            onClick={() =>
-                                handleAction(`/admin/players/${kickTarget}/kick`, { reason }, () => setKickTarget(null))
-                            }
-                        >
-                            <UserX className="mr-1.5 size-3.5" />
-                            Kick Player
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Ban Dialog */}
-            <Dialog open={banTarget !== null} onOpenChange={() => setBanTarget(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Ban {banTarget}</DialogTitle>
-                        <DialogDescription>This player will be permanently banned from the server.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                        <Label htmlFor="map-ban-reason">Reason (optional)</Label>
-                        <Input
-                            id="map-ban-reason"
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            placeholder="Reason for ban..."
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setBanTarget(null)}>Cancel</Button>
-                        <Button
-                            variant="destructive"
-                            disabled={loading}
-                            onClick={() =>
-                                handleAction(`/admin/players/${banTarget}/ban`, { reason }, () => setBanTarget(null))
-                            }
-                        >
-                            <Ban className="mr-1.5 size-3.5" />
-                            Ban Player
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Access Level Dialog */}
-            <Dialog open={accessTarget !== null} onOpenChange={() => setAccessTarget(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Set Access Level for {accessTarget}</DialogTitle>
-                        <DialogDescription>Change the player's server access level.</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                        <Label>Access Level</Label>
-                        <Select value={accessLevel} onValueChange={setAccessLevel}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="moderator">Moderator</SelectItem>
-                                <SelectItem value="overseer">Overseer</SelectItem>
-                                <SelectItem value="gm">GM</SelectItem>
-                                <SelectItem value="observer">Observer</SelectItem>
-                                <SelectItem value="none">None</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setAccessTarget(null)}>Cancel</Button>
-                        <Button
-                            disabled={loading}
-                            onClick={() =>
-                                handleAction(
-                                    `/admin/players/${accessTarget}/access`,
-                                    { level: accessLevel },
-                                    () => setAccessTarget(null),
-                                )
-                            }
-                        >
-                            <ShieldCheck className="mr-1.5 size-3.5" />
-                            Set Access
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <PlayerActionDialogs
+                kickTarget={kickTarget}
+                banTarget={banTarget}
+                accessTarget={accessTarget}
+                onCloseKick={() => setKickTarget(null)}
+                onCloseBan={() => setBanTarget(null)}
+                onCloseAccess={() => setAccessTarget(null)}
+                reloadOnly={['markers']}
+            />
         </AppLayout>
     );
 }

@@ -24,17 +24,19 @@ class PlayerController extends Controller
     public function index(): Response
     {
         $onlineNames = $this->onlinePlayers->getOnlineUsernames();
-        $onlinePlayers = array_map(fn ($name) => ['name' => $name], $onlineNames);
 
         $statsMap = PlayerStat::query()
             ->get()
             ->keyBy('username');
 
-        $registeredUsers = User::query()
+        $registeredUsernames = [];
+
+        $players = User::query()
             ->select('id', 'username', 'role', 'created_at')
             ->orderBy('username')
             ->get()
-            ->map(function (User $user) use ($onlineNames, $statsMap) {
+            ->map(function (User $user) use ($onlineNames, $statsMap, &$registeredUsernames) {
+                $registeredUsernames[] = $user->username;
                 $stats = $statsMap->get($user->username);
 
                 return [
@@ -49,11 +51,31 @@ class PlayerController extends Controller
                         'profession' => $stats->profession,
                     ] : null,
                 ];
-            });
+            })
+            ->toArray();
+
+        // Add online-only unregistered players as pseudo-entries
+        foreach ($onlineNames as $name) {
+            if (! in_array($name, $registeredUsernames)) {
+                $stats = $statsMap->get($name);
+
+                $players[] = [
+                    'id' => null,
+                    'username' => $name,
+                    'role' => 'unknown',
+                    'isOnline' => true,
+                    'createdAt' => null,
+                    'stats' => $stats ? [
+                        'zombie_kills' => $stats->zombie_kills,
+                        'hours_survived' => $stats->hours_survived,
+                        'profession' => $stats->profession,
+                    ] : null,
+                ];
+            }
+        }
 
         return Inertia::render('admin/players', [
-            'players' => $onlinePlayers,
-            'registeredUsers' => Inertia::defer(fn () => $registeredUsers),
+            'players' => $players,
         ]);
     }
 

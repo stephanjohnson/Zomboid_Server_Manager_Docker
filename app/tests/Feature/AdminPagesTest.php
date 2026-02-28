@@ -117,8 +117,7 @@ it('renders the player management page', function () {
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
         ->component('admin/players')
-        ->has('players', 2)
-        ->has('registeredUsers')
+        ->has('players', 3) // 1 admin user + 2 unregistered online (Alice, Bob)
     );
 });
 
@@ -132,9 +131,8 @@ it('shows registered users even when server is offline', function () {
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
         ->component('admin/players')
-        ->has('players', 0)
-        ->has('registeredUsers', 1)
-        ->where('registeredUsers.0.username', $admin->username)
+        ->has('players', 1)
+        ->where('players.0.username', $admin->username)
     );
 });
 
@@ -146,7 +144,7 @@ it('handles offline server on player page', function () {
     $response->assertOk();
     $response->assertInertia(fn ($page) => $page
         ->component('admin/players')
-        ->has('players', 0)
+        ->has('players', 1) // admin user still in unified list
     );
 });
 
