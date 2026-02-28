@@ -26,18 +26,24 @@ end
 function ZM_GameState.export()
     local gt = getGameTime()
     if not gt then
-        print("[ZomboidManager] GameState: getGameTime() unavailable")
         return false
     end
 
-    local year = gt:getYear()
-    local month = gt:getMonth() + 1 -- PZ months are 0-based
-    local day = gt:getDay() + 1     -- PZ days are 0-based
-    local hour = gt:getHour()
-    local minute = gt:getMinutes()
-    local dayOfYear = gt:getDayOfYear()
+    local ok1, year = pcall(function() return gt:getYear() end)
+    local ok2, month = pcall(function() return gt:getMonth() end)
+    local ok3, day = pcall(function() return gt:getDay() end)
+    local ok4, hour = pcall(function() return gt:getHour() end)
+    local ok5, minute = pcall(function() return gt:getMinutes() end)
 
-    local isNight = gt:getNight() > 0.5
+    if not ok1 then year = 0 end
+    if ok2 then month = month + 1 else month = 1 end
+    if ok3 then day = day + 1 else day = 1 end
+    if not ok4 then hour = 0 end
+    if not ok5 then minute = 0 end
+
+    local isNight = false
+    local okN, nightVal = pcall(function() return gt:getNight() end)
+    if okN and nightVal then isNight = nightVal > 0.5 end
 
     local state = {
         time = {
@@ -46,7 +52,7 @@ function ZM_GameState.export()
             day = day,
             hour = hour,
             minute = minute,
-            day_of_year = dayOfYear,
+            day_of_year = 0,
             is_night = isNight,
             formatted = string.format("%02d:%02d", hour, minute),
             date = string.format("%04d-%02d-%02d", year, month, day),
@@ -54,60 +60,25 @@ function ZM_GameState.export()
         season = getSeason(month),
     }
 
-    -- Climate data (may not be available during early startup)
-    local cm = getClimateManager()
-    if cm then
-        local temp = cm:getAirTemperatureForCharacter()
-        local rain = cm:getRainIntensity()
-        local fog = cm:getFogIntensity()
-        local wind = cm:getWindIntensity()
-        local snow = cm:getSnowIntensity()
-
-        state.weather = {
-            temperature = math.floor(temp * 10 + 0.5) / 10, -- round to 1 decimal
-            rain_intensity = math.floor(rain * 100 + 0.5) / 100,
-            fog_intensity = math.floor(fog * 100 + 0.5) / 100,
-            wind_intensity = math.floor(wind * 100 + 0.5) / 100,
-            snow_intensity = math.floor(snow * 100 + 0.5) / 100,
-            is_raining = rain > 0.1,
-            is_foggy = fog > 0.2,
-            is_snowing = snow > 0.1,
-        }
-
-        -- Determine primary weather condition
-        if snow > 0.1 then
-            state.weather.condition = "snow"
-        elseif rain > 0.5 then
-            state.weather.condition = "heavy_rain"
-        elseif rain > 0.1 then
-            state.weather.condition = "rain"
-        elseif fog > 0.3 then
-            state.weather.condition = "fog"
-        elseif isNight then
-            state.weather.condition = "night"
-        else
-            state.weather.condition = "clear"
-        end
+    local okT, now = pcall(os.time)
+    if okT then
+        state.exported_at = os.date("!%Y-%m-%dT%H:%M:%SZ", now)
+    else
+        state.exported_at = "unknown"
     end
 
-    -- Timestamp for staleness detection
-    local now = os.time()
-    state.exported_at = os.date("!%Y-%m-%dT%H:%M:%SZ", now)
-
-    local ok, jsonStr = pcall(json.encode, state)
-    if not ok then
+    local encOk, jsonStr = pcall(json.encode, state)
+    if not encOk then
         print("[ZomboidManager] GameState: JSON encode error: " .. tostring(jsonStr))
         return false
     end
 
     local writer = getFileWriter("game_state.json", true, false)
     if not writer then
-        print("[ZomboidManager] GameState: cannot open file writer")
         return false
     end
 
     writer:write(jsonStr)
     writer:close()
-
     return true
 end

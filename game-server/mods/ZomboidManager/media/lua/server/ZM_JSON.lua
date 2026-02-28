@@ -4,7 +4,7 @@
 -- compatible with PZ's restricted Lua 5.1 environment.
 --
 
-local json = {}
+json = {}
 
 -- Encode --
 
@@ -39,13 +39,21 @@ local function encode_table(val, stack)
     end
     stack[val] = true
 
-    if rawget(val, 1) ~= nil or next(val) == nil then
+    -- Check if table is array-like or empty (avoid rawget/next which Kahlua lacks)
+    local is_array = false
+    local has_keys = false
+    for k, _ in pairs(val) do
+        has_keys = true
+        if type(k) == "number" then
+            is_array = true
+        end
+        break
+    end
+
+    if is_array or not has_keys then
         -- Treat as array
         local n = 0
-        for k in pairs(val) do
-            if type(k) ~= "number" then
-                error("invalid table: mixed or non-sequential keys")
-            end
+        for _ in pairs(val) do
             n = n + 1
         end
         for i = 1, n do

@@ -57,13 +57,18 @@ local function onEveryOneMinute()
     ZM_GameState.export()
 end
 
---- OnServerStarted — export item catalog once on server boot
+--- OnServerStarted — export game state and item catalog on server boot
 local function onServerStarted()
-    local count = ZM_ItemCatalog.export()
-    if count > 0 then
+    -- Export game state immediately so it's available even when server is paused
+    if ZM_GameState.export() then
+        print("[ZomboidManager] Exported initial game state")
+    end
+
+    local ok, count = pcall(ZM_ItemCatalog.export)
+    if ok and count and count > 0 then
         print("[ZomboidManager] Exported item catalog: " .. count .. " items")
     else
-        print("[ZomboidManager] WARNING: item catalog export returned 0 items")
+        print("[ZomboidManager] WARNING: item catalog export failed or returned 0 items")
     end
 end
 
