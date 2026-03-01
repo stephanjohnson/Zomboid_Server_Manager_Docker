@@ -1,6 +1,8 @@
 import { Head, router } from '@inertiajs/react';
-import { AlertTriangle, Plus, RefreshCw, Settings, Shield, ShieldOff } from 'lucide-react';
-import { useState } from 'react';
+import { AlertTriangle, Plus, RefreshCw, Search, Settings, Shield, ShieldOff } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { SortIcon } from '@/components/sort-icon';
+import { useTableSort } from '@/hooks/use-table-sort';
 import { fetchAction } from '@/lib/fetch-action';
 import AppLayout from '@/layouts/app-layout';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -17,8 +19,16 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { BreadcrumbItem } from '@/types';
 
 type PlayerEntry = {
@@ -34,6 +44,9 @@ type WhitelistSettings = {
     auto_create_user_in_whitelist: boolean;
 };
 
+type SortKey = 'username' | 'role' | 'status';
+type StatusFilter = 'all' | 'whitelisted' | 'not_whitelisted';
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
     { title: 'Whitelist', href: '/admin/whitelist' },
@@ -46,6 +59,13 @@ const roleBadgeVariant: Record<string, 'default' | 'secondary' | 'outline'> = {
     player: 'outline',
 };
 
+const roleOrder: Record<string, number> = {
+    super_admin: 0,
+    admin: 1,
+    moderator: 2,
+    player: 3,
+};
+
 export default function Whitelist({ players, whitelist_settings }: { players: PlayerEntry[]; whitelist_settings: WhitelistSettings }) {
     const [showAdd, setShowAdd] = useState(false);
     const [passwordTarget, setPasswordTarget] = useState<string | null>(null);
@@ -54,6 +74,9 @@ export default function Whitelist({ players, whitelist_settings }: { players: Pl
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [syncing, setSyncing] = useState(false);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    const { sortKey, sortDir, toggleSort } = useTableSort<SortKey>('username');
 
     const [enforceWhitelist, setEnforceWhitelist] = useState(!whitelist_settings.open);
     const [autoRegister, setAutoRegister] = useState(whitelist_settings.auto_create_user_in_whitelist);
@@ -65,6 +88,36 @@ export default function Whitelist({ players, whitelist_settings }: { players: Pl
         autoRegister !== whitelist_settings.auto_create_user_in_whitelist;
 
     const whitelistedCount = players.filter((p) => p.whitelisted).length;
+
+    const filteredPlayers = useMemo(() => {
+        let result = players;
+
+        if (statusFilter === 'whitelisted') {
+            result = result.filter((p) => p.whitelisted);
+        } else if (statusFilter === 'not_whitelisted') {
+            result = result.filter((p) => !p.whitelisted);
+        }
+
+        if (search) {
+            const q = search.toLowerCase();
+            result = result.filter((p) => p.username.toLowerCase().includes(q));
+        }
+
+        const sorted = [...result];
+        sorted.sort((a, b) => {
+            let cmp = 0;
+            if (sortKey === 'username') {
+                cmp = a.username.localeCompare(b.username);
+            } else if (sortKey === 'role') {
+                cmp = (roleOrder[a.role] ?? 99) - (roleOrder[b.role] ?? 99);
+            } else if (sortKey === 'status') {
+                cmp = Number(a.whitelisted) - Number(b.whitelisted);
+            }
+            return sortDir === 'desc' ? -cmp : cmp;
+        });
+
+        return sorted;
+    }, [players, search, statusFilter, sortKey, sortDir]);
 
     async function addUser() {
         setLoading(true);
@@ -219,64 +272,118 @@ export default function Whitelist({ players, whitelist_settings }: { players: Pl
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Shield className="size-5" />
-                            All Players
-                        </CardTitle>
-                        <CardDescription>
-                            All known players. Toggle whitelist to control who can join when the server requires whitelist (Open=false).
-                        </CardDescription>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Shield className="size-5" />
+                                    All Players
+                                </CardTitle>
+                                <CardDescription>
+                                    {filteredPlayers.length} of {players.length} players
+                                </CardDescription>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search players..."
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        className="pl-9 sm:w-[200px]"
+                                    />
+                                </div>
+                                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+                                    <SelectTrigger className="w-full sm:w-[160px]">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All</SelectItem>
+                                        <SelectItem value="whitelisted">Whitelisted</SelectItem>
+                                        <SelectItem value="not_whitelisted">Not Whitelisted</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        {players.length > 0 ? (
-                            <div className="space-y-2">
-                                {players.map((player) => (
-                                    <div
-                                        key={player.username}
-                                        className="flex items-center justify-between rounded-lg border border-border/50 px-4 py-3"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-medium">{player.username}</span>
-                                                    <Badge variant={roleBadgeVariant[player.role] ?? 'outline'}>
-                                                        {player.role}
+                        {filteredPlayers.length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>
+                                            <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('username')}>
+                                                Username
+                                                <SortIcon column="username" sortKey={sortKey} sortDir={sortDir} />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead className="hidden sm:table-cell">Character</TableHead>
+                                        <TableHead className="hidden sm:table-cell">
+                                            <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('role')}>
+                                                Role
+                                                <SortIcon column="role" sortKey={sortKey} sortDir={sortDir} />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead>
+                                            <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('status')}>
+                                                Status
+                                                <SortIcon column="status" sortKey={sortKey} sortDir={sortDir} />
+                                            </button>
+                                        </TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredPlayers.map((player) => (
+                                        <TableRow key={player.username}>
+                                            <TableCell className="font-medium">{player.username}</TableCell>
+                                            <TableCell className="hidden text-muted-foreground sm:table-cell">
+                                                {player.character_name && player.character_name !== player.username
+                                                    ? player.character_name
+                                                    : '-'}
+                                            </TableCell>
+                                            <TableCell className="hidden sm:table-cell">
+                                                <Badge variant={roleBadgeVariant[player.role] ?? 'outline'}>
+                                                    {player.role}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                {player.whitelisted ? (
+                                                    <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                                                        Whitelisted
                                                     </Badge>
-                                                    {player.whitelisted && (
-                                                        <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                                                            Whitelisted
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                                {player.character_name && player.character_name !== player.username && (
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Character: {player.character_name}
-                                                    </p>
+                                                ) : (
+                                                    <Badge variant="outline">Not Whitelisted</Badge>
                                                 )}
-                                            </div>
-                                        </div>
-                                        <Button
-                                            variant={player.whitelisted ? 'outline' : 'default'}
-                                            size="sm"
-                                            onClick={() => toggleWhitelist(player.username, player.whitelisted)}
-                                        >
-                                            {player.whitelisted ? (
-                                                <>
-                                                    <ShieldOff className="mr-1.5 size-4" />
-                                                    Remove
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Shield className="mr-1.5 size-4" />
-                                                    Whitelist
-                                                </>
-                                            )}
-                                        </Button>
-                                    </div>
-                                ))}
-                            </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    variant={player.whitelisted ? 'outline' : 'default'}
+                                                    size="sm"
+                                                    onClick={() => toggleWhitelist(player.username, player.whitelisted)}
+                                                >
+                                                    {player.whitelisted ? (
+                                                        <>
+                                                            <ShieldOff className="mr-1.5 size-4" />
+                                                            Remove
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Shield className="mr-1.5 size-4" />
+                                                            Whitelist
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         ) : (
-                            <p className="py-8 text-center text-muted-foreground">No players found. Run account sync to discover players.</p>
+                            <p className="py-8 text-center text-muted-foreground">
+                                {search || statusFilter !== 'all'
+                                    ? 'No players match your filters'
+                                    : 'No players found. Run account sync to discover players.'}
+                            </p>
                         )}
                     </CardContent>
                 </Card>

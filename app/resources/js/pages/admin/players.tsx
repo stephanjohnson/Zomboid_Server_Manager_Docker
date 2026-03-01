@@ -1,7 +1,9 @@
 import { Head, Link, usePoll } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Backpack, Ban, Circle, Clock, Search, ShieldCheck, Skull, UserX } from 'lucide-react';
+import { Backpack, Ban, Circle, Clock, Search, ShieldCheck, Skull, UserX } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import PlayerActionDialogs from '@/components/player-action-dialogs';
+import { SortIcon } from '@/components/sort-icon';
+import { useTableSort } from '@/hooks/use-table-sort';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,7 +33,6 @@ type Player = {
 };
 
 type SortKey = 'status' | 'username' | 'kills' | 'hours' | 'joined';
-type SortDir = 'asc' | 'desc';
 type StatusFilter = 'all' | 'online' | 'offline';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -50,8 +51,7 @@ const roleBadgeVariant: Record<string, 'default' | 'secondary' | 'outline'> = {
 export default function Players({ players }: { players: Player[] }) {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-    const [sortKey, setSortKey] = useState<SortKey>('status');
-    const [sortDir, setSortDir] = useState<SortDir>('desc');
+    const { sortKey, sortDir, toggleSort } = useTableSort<SortKey>('status', 'desc');
 
     const [kickTarget, setKickTarget] = useState<string | null>(null);
     const [banTarget, setBanTarget] = useState<string | null>(null);
@@ -60,22 +60,6 @@ export default function Players({ players }: { players: Player[] }) {
     usePoll(5000, { only: ['players'] });
 
     const onlineCount = useMemo(() => players.filter((p) => p.isOnline).length, [players]);
-
-    function toggleSort(key: SortKey) {
-        if (sortKey === key) {
-            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-        } else {
-            setSortKey(key);
-            setSortDir('asc');
-        }
-    }
-
-    function SortIcon({ column }: { column: SortKey }) {
-        if (sortKey !== column) return <ArrowUpDown className="ml-1 inline size-3 text-muted-foreground/50" />;
-        return sortDir === 'asc'
-            ? <ArrowUp className="ml-1 inline size-3" />
-            : <ArrowDown className="ml-1 inline size-3" />;
-    }
 
     const filteredPlayers = useMemo(() => {
         let result = players;
@@ -169,13 +153,13 @@ export default function Players({ players }: { players: Player[] }) {
                                     <TableRow>
                                         <TableHead className="w-[40px]">
                                             <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('status')}>
-                                                <SortIcon column="status" />
+                                                <SortIcon column="status" sortKey={sortKey} sortDir={sortDir} />
                                             </button>
                                         </TableHead>
                                         <TableHead>
                                             <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('username')}>
                                                 Player
-                                                <SortIcon column="username" />
+                                                <SortIcon column="username" sortKey={sortKey} sortDir={sortDir} />
                                             </button>
                                         </TableHead>
                                         <TableHead className="hidden sm:table-cell">Role</TableHead>
@@ -183,20 +167,20 @@ export default function Players({ players }: { players: Player[] }) {
                                             <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('kills')}>
                                                 <Skull className="mr-1 size-3" />
                                                 Kills
-                                                <SortIcon column="kills" />
+                                                <SortIcon column="kills" sortKey={sortKey} sortDir={sortDir} />
                                             </button>
                                         </TableHead>
                                         <TableHead className="hidden md:table-cell">
                                             <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('hours')}>
                                                 <Clock className="mr-1 size-3" />
                                                 Hours
-                                                <SortIcon column="hours" />
+                                                <SortIcon column="hours" sortKey={sortKey} sortDir={sortDir} />
                                             </button>
                                         </TableHead>
                                         <TableHead className="hidden lg:table-cell">
                                             <button type="button" className="flex items-center hover:text-foreground" onClick={() => toggleSort('joined')}>
                                                 Joined
-                                                <SortIcon column="joined" />
+                                                <SortIcon column="joined" sortKey={sortKey} sortDir={sortDir} />
                                             </button>
                                         </TableHead>
                                         <TableHead className="text-right">Actions</TableHead>

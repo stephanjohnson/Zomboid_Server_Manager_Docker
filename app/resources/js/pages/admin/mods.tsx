@@ -1,6 +1,6 @@
 import { Head, router } from '@inertiajs/react';
-import { Package, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Package, Plus, Search, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { fetchAction } from '@/lib/fetch-action';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { BreadcrumbItem, ModEntry } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -30,6 +31,13 @@ export default function Mods({ mods }: { mods: ModEntry[] }) {
     const [modId, setModId] = useState('');
     const [mapFolder, setMapFolder] = useState('');
     const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState('');
+
+    const filteredMods = useMemo(() => {
+        if (!search) return mods;
+        const q = search.toLowerCase();
+        return mods.filter((m) => m.mod_id.toLowerCase().includes(q) || m.workshop_id.toLowerCase().includes(q));
+    }, [mods, search]);
 
     async function addMod() {
         setLoading(true);
@@ -75,46 +83,68 @@ export default function Mods({ mods }: { mods: ModEntry[] }) {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Package className="size-5" />
-                            Installed Mods
-                        </CardTitle>
-                        <CardDescription>
-                            Steam Workshop mods synced to server.ini. Changes require a server restart.
-                        </CardDescription>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Package className="size-5" />
+                                    Installed Mods
+                                </CardTitle>
+                                <CardDescription>
+                                    {filteredMods.length} of {mods.length} mods &middot; Changes require a server restart
+                                </CardDescription>
+                            </div>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search mods..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-9 sm:w-[200px]"
+                                />
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
-                        {mods.length > 0 ? (
-                            <div className="space-y-2">
-                                {mods.map((mod) => (
-                                    <div
-                                        key={mod.workshop_id}
-                                        className="flex items-center justify-between rounded-lg border border-border/50 px-4 py-3"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-xs font-mono text-muted-foreground w-6">
-                                                #{mod.position + 1}
-                                            </span>
-                                            <div>
-                                                <span className="font-medium">{mod.mod_id}</span>
-                                                <Badge variant="secondary" className="ml-2 text-xs">
+                        {filteredMods.length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[50px]">#</TableHead>
+                                        <TableHead>Mod ID</TableHead>
+                                        <TableHead className="hidden sm:table-cell">Workshop ID</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredMods.map((mod) => (
+                                        <TableRow key={mod.workshop_id}>
+                                            <TableCell className="font-mono text-xs text-muted-foreground">
+                                                {mod.position + 1}
+                                            </TableCell>
+                                            <TableCell className="font-medium">{mod.mod_id}</TableCell>
+                                            <TableCell className="hidden sm:table-cell">
+                                                <Badge variant="secondary" className="text-xs">
                                                     {mod.workshop_id}
                                                 </Badge>
-                                            </div>
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-destructive hover:text-destructive"
-                                            onClick={() => setDeleteTarget(mod)}
-                                        >
-                                            <Trash2 className="size-4" />
-                                        </Button>
-                                    </div>
-                                ))}
-                            </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-destructive hover:text-destructive"
+                                                    onClick={() => setDeleteTarget(mod)}
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         ) : (
-                            <p className="py-8 text-center text-muted-foreground">No mods installed</p>
+                            <p className="py-8 text-center text-muted-foreground">
+                                {search ? 'No mods match your search' : 'No mods installed'}
+                            </p>
                         )}
                     </CardContent>
                 </Card>

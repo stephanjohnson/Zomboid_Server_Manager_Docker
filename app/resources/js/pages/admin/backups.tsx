@@ -1,6 +1,6 @@
 import { Deferred, Head, router } from '@inertiajs/react';
-import { Archive, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Archive, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { fetchAction } from '@/lib/fetch-action';
 import type { BackupEntry, BreadcrumbItem } from '@/types';
@@ -68,6 +69,13 @@ export default function Backups({ backups }: { backups: PaginatedBackups }) {
     const [loading, setLoading] = useState(false);
     const [rollbackCountdown, setRollbackCountdown] = useState('0');
     const [rollbackMessage, setRollbackMessage] = useState('');
+    const [search, setSearch] = useState('');
+
+    const filteredBackups = useMemo(() => {
+        if (!backups?.data || !search) return backups?.data ?? [];
+        const q = search.toLowerCase();
+        return backups.data.filter((b) => b.filename.toLowerCase().includes(q));
+    }, [backups?.data, search]);
 
     async function createBackup() {
         setLoading(true);
@@ -141,77 +149,115 @@ export default function Backups({ backups }: { backups: PaginatedBackups }) {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Archive className="size-5" />
-                            Backups
-                        </CardTitle>
-                        <CardDescription>Server world saves with rollback support</CardDescription>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Archive className="size-5" />
+                                    Backups
+                                </CardTitle>
+                                <CardDescription>Server world saves with rollback support</CardDescription>
+                            </div>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search backups..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-9 sm:w-[200px]"
+                                />
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <Deferred data="backups" fallback={
-                            <div className="space-y-2">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                    <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 px-4 py-3">
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <Skeleton className="h-4 w-48" />
-                                                <Skeleton className="h-5 w-16 rounded-full" />
-                                            </div>
-                                            <div className="mt-1 flex items-center gap-2">
-                                                <Skeleton className="h-3 w-16" />
-                                                <Skeleton className="h-3 w-28" />
-                                            </div>
-                                        </div>
-                                        <div className="ml-4 flex items-center gap-1.5">
-                                            <Skeleton className="h-8 w-24 rounded-md" />
-                                            <Skeleton className="h-8 w-8 rounded-md" />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Filename</TableHead>
+                                        <TableHead className="hidden sm:table-cell">Type</TableHead>
+                                        <TableHead className="hidden sm:table-cell">Size</TableHead>
+                                        <TableHead className="hidden md:table-cell">Date</TableHead>
+                                        <TableHead className="hidden lg:table-cell">Notes</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {Array.from({ length: 5 }).map((_, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                                            <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                                            <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-16" /></TableCell>
+                                            <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-28" /></TableCell>
+                                            <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-32" /></TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Skeleton className="h-8 w-24 rounded-md" />
+                                                    <Skeleton className="h-8 w-8 rounded-md" />
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         }>
-                            {backups?.data.length > 0 ? (
-                                <div className="space-y-2">
-                                    {backups.data.map((backup) => (
-                                        <div
-                                            key={backup.id}
-                                            className="flex flex-col gap-2 rounded-lg border border-border/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                                        >
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <span className="truncate font-medium text-sm">{backup.filename}</span>
+                            {filteredBackups.length > 0 ? (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Filename</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Type</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Size</TableHead>
+                                            <TableHead className="hidden md:table-cell">Date</TableHead>
+                                            <TableHead className="hidden lg:table-cell">Notes</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredBackups.map((backup) => (
+                                            <TableRow key={backup.id}>
+                                                <TableCell className="font-medium text-sm">{backup.filename}</TableCell>
+                                                <TableCell className="hidden sm:table-cell">
                                                     <Badge className={`text-xs ${typeColors[backup.type] ?? ''}`}>
                                                         {backup.type}
                                                     </Badge>
-                                                </div>
-                                                <div className="mt-0.5 text-xs text-muted-foreground">
-                                                    {backup.size_human} &middot; {new Date(backup.created_at).toLocaleString()}
-                                                    {backup.notes && <> &middot; {backup.notes}</>}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 sm:ml-4">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setRollbackTarget(backup)}
-                                                >
-                                                    <RotateCcw className="mr-1.5 size-3.5" />
-                                                    Rollback
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="text-destructive hover:text-destructive"
-                                                    onClick={() => setDeleteTarget(backup)}
-                                                >
-                                                    <Trash2 className="size-4" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                                </TableCell>
+                                                <TableCell className="hidden tabular-nums sm:table-cell">
+                                                    {backup.size_human}
+                                                </TableCell>
+                                                <TableCell className="hidden md:table-cell">
+                                                    {new Date(backup.created_at).toLocaleString()}
+                                                </TableCell>
+                                                <TableCell className="hidden lg:table-cell">
+                                                    <span className="text-muted-foreground">{backup.notes ?? '-'}</span>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setRollbackTarget(backup)}
+                                                        >
+                                                            <RotateCcw className="mr-1.5 size-3.5" />
+                                                            Rollback
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-destructive hover:text-destructive"
+                                                            onClick={() => setDeleteTarget(backup)}
+                                                        >
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             ) : (
-                                <p className="py-8 text-center text-muted-foreground">No backups yet</p>
+                                <p className="py-8 text-center text-muted-foreground">
+                                    {search ? 'No backups match your search' : 'No backups yet'}
+                                </p>
                             )}
 
                             {/* Pagination */}

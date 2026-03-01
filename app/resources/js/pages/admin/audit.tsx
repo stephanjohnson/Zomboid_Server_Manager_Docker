@@ -1,6 +1,6 @@
 import { Deferred, Head, router } from '@inertiajs/react';
-import { Filter, ScrollText } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, ChevronRight, Filter, ScrollText } from 'lucide-react';
+import { Fragment, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import type { AuditEntry, BreadcrumbItem } from '@/types';
 
@@ -46,6 +47,7 @@ export default function Audit({
     available_actions: string[];
 }) {
     const [localFilters, setLocalFilters] = useState(filters);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     function applyFilters() {
         const params: Record<string, string> = {};
@@ -145,58 +147,92 @@ export default function Audit({
                     </CardHeader>
                     <CardContent>
                         <Deferred data="logs" fallback={
-                            <div className="space-y-2">
-                                {Array.from({ length: 6 }).map((_, i) => (
-                                    <div key={i} className="rounded-lg border border-border/50 px-4 py-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Skeleton className="h-5 w-24 rounded-full" />
-                                                <Skeleton className="h-4 w-32" />
-                                            </div>
-                                            <Skeleton className="h-3 w-28" />
-                                        </div>
-                                        <div className="mt-1 flex items-center gap-4">
-                                            <Skeleton className="h-3 w-20" />
-                                            <Skeleton className="h-3 w-24" />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Action</TableHead>
+                                        <TableHead>Target</TableHead>
+                                        <TableHead className="hidden sm:table-cell">Actor</TableHead>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead className="hidden md:table-cell">IP</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {Array.from({ length: 6 }).map((_, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell><Skeleton className="h-5 w-24 rounded-full" /></TableCell>
+                                            <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                                            <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-20" /></TableCell>
+                                            <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                                            <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         }>
                             {logs?.data.length > 0 ? (
-                                <div className="space-y-2">
-                                    {logs.data.map((entry) => (
-                                        <div
-                                            key={entry.id}
-                                            className="rounded-lg border border-border/50 px-4 py-3"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Badge variant="outline" className="text-xs font-mono">
-                                                        {entry.action}
-                                                    </Badge>
-                                                    {entry.target && (
-                                                        <span className="text-sm text-muted-foreground">{entry.target}</span>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Action</TableHead>
+                                            <TableHead>Target</TableHead>
+                                            <TableHead className="hidden sm:table-cell">Actor</TableHead>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead className="hidden md:table-cell">IP</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {logs.data.map((entry) => {
+                                            const hasDetails = entry.details && Object.keys(entry.details).length > 0;
+                                            const isExpanded = expandedId === entry.id;
+
+                                            return (
+                                                <Fragment key={entry.id}>
+                                                    <TableRow
+                                                        className={hasDetails ? 'cursor-pointer' : ''}
+                                                        onClick={() => hasDetails && setExpandedId(isExpanded ? null : entry.id)}
+                                                    >
+                                                        <TableCell>
+                                                            <div className="flex items-center gap-1.5">
+                                                                {hasDetails && (
+                                                                    isExpanded
+                                                                        ? <ChevronDown className="size-3.5 text-muted-foreground" />
+                                                                        : <ChevronRight className="size-3.5 text-muted-foreground" />
+                                                                )}
+                                                                <Badge variant="outline" className="text-xs font-mono">
+                                                                    {entry.action}
+                                                                </Badge>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-sm text-muted-foreground">
+                                                            {entry.target ?? '-'}
+                                                        </TableCell>
+                                                        <TableCell className="hidden sm:table-cell">
+                                                            {entry.actor}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {entry.created_at
+                                                                ? new Date(entry.created_at).toLocaleString()
+                                                                : ''}
+                                                        </TableCell>
+                                                        <TableCell className="hidden md:table-cell">
+                                                            {entry.ip_address ?? '-'}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                    {isExpanded && hasDetails && (
+                                                        <TableRow key={`${entry.id}-details`}>
+                                                            <TableCell colSpan={5} className="bg-muted/30 p-0">
+                                                                <pre className="max-h-48 overflow-auto p-3 text-xs font-mono">
+                                                                    {JSON.stringify(entry.details, null, 2)}
+                                                                </pre>
+                                                            </TableCell>
+                                                        </TableRow>
                                                     )}
-                                                </div>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {entry.created_at
-                                                        ? new Date(entry.created_at).toLocaleString()
-                                                        : ''}
-                                                </span>
-                                            </div>
-                                            <div className="mt-1 flex items-center gap-4 text-xs text-muted-foreground">
-                                                <span>by {entry.actor}</span>
-                                                {entry.ip_address && <span>from {entry.ip_address}</span>}
-                                            </div>
-                                            {entry.details && Object.keys(entry.details).length > 0 && (
-                                                <pre className="mt-2 max-h-32 overflow-auto rounded bg-muted/50 p-2 text-xs font-mono">
-                                                    {JSON.stringify(entry.details, null, 2)}
-                                                </pre>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
+                                                </Fragment>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
                             ) : (
                                 <p className="py-8 text-center text-muted-foreground">No audit events found</p>
                             )}
