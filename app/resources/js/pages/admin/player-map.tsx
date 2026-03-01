@@ -3,6 +3,7 @@ import { AlertTriangle, Circle, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import PlayerActionDialogs from '@/components/player-action-dialogs';
 import PzMap from '@/components/pz-map';
+import type { ZoneOverlay } from '@/components/pz-map';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
@@ -16,6 +17,15 @@ type TileProgress = {
     percent: number;
 };
 
+type SafeZone = {
+    id: string;
+    name: string;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+};
+
 type Props = {
     markers: PlayerMarker[];
     onlineCount: number;
@@ -23,6 +33,7 @@ type Props = {
     mapConfig: MapConfig;
     hasTiles: boolean;
     tileProgress: TileProgress | null;
+    safeZones: SafeZone[];
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -37,8 +48,15 @@ const statusDotColor: Record<PlayerMarker['status'], string> = {
     dead: 'fill-red-500 text-red-500',
 };
 
-export default function PlayerMap({ markers, onlineCount, serverStatus, mapConfig, hasTiles, tileProgress }: Props) {
-    usePoll(5000, { only: ['markers', 'onlineCount', 'serverStatus', 'hasTiles', 'tileProgress'] });
+const ZONE_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899'];
+
+export default function PlayerMap({ markers, onlineCount, serverStatus, mapConfig, hasTiles, tileProgress, safeZones }: Props) {
+    usePoll(5000, { only: ['markers', 'onlineCount', 'serverStatus', 'hasTiles', 'tileProgress', 'safeZones'] });
+
+    const zoneOverlays: ZoneOverlay[] = useMemo(
+        () => safeZones.map((zone, i) => ({ ...zone, color: ZONE_COLORS[i % ZONE_COLORS.length] })),
+        [safeZones],
+    );
 
     const [kickTarget, setKickTarget] = useState<string | null>(null);
     const [banTarget, setBanTarget] = useState<string | null>(null);
@@ -145,6 +163,7 @@ export default function PlayerMap({ markers, onlineCount, serverStatus, mapConfi
                             mapConfig={mapConfig}
                             hasTiles={hasTiles}
                             onMarkerAction={handleMarkerAction}
+                            zones={zoneOverlays}
                             className="rounded-xl"
                         />
                     </CardContent>

@@ -7,6 +7,7 @@ use App\Services\MapConfigBuilder;
 use App\Services\OnlinePlayersReader;
 use App\Services\PlayerPositionReader;
 use App\Services\PlayersDbReader;
+use App\Services\SafeZoneManager;
 use App\Services\ServerStatusResolver;
 use Illuminate\Http\Response;
 use Inertia\Inertia;
@@ -21,6 +22,7 @@ class PlayerMapController extends Controller
         private readonly OnlinePlayersReader $onlinePlayers,
         private readonly ServerStatusResolver $statusResolver,
         private readonly MapConfigBuilder $mapConfigBuilder,
+        private readonly SafeZoneManager $safeZoneManager,
     ) {}
 
     public function __invoke(): InertiaResponse
@@ -101,6 +103,7 @@ class PlayerMapController extends Controller
         }
 
         $mapConfig = $this->mapConfigBuilder->build();
+        $safeZoneConfig = $this->safeZoneManager->getConfig();
 
         return Inertia::render('admin/player-map', [
             'markers' => $markers,
@@ -110,6 +113,7 @@ class PlayerMapController extends Controller
             'hasTiles' => $mapConfig['tileUrl'] !== null,
             'tileProgress' => null,
             'tilesGenerating' => false,
+            'safeZones' => $safeZoneConfig['enabled'] ? $safeZoneConfig['zones'] : [],
         ]);
     }
 
