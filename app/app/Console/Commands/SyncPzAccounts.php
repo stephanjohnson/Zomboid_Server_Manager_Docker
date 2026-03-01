@@ -47,7 +47,27 @@ class SyncPzAccounts extends Command
                     ->where('pz_username', $account->username)
                     ->first();
 
-                if ($entry && $entry->pz_password_hash !== $pzPassword) {
+                if (! $entry) {
+                    // User exists but has no WhitelistEntry (created by networkPlayers pass
+                    // with a random password). Create the missing entry and fix the password.
+                    WhitelistEntry::create([
+                        'user_id' => $existingUser->id,
+                        'pz_username' => $account->username,
+                        'pz_password_hash' => $pzPassword,
+                        'active' => true,
+                        'synced_at' => now(),
+                    ]);
+
+                    $existingUser->forceFill([
+                        'password' => $isBcrypt ? $pzPassword : Hash::make($pzPassword),
+                    ])->save();
+
+                    $passwordUpdated++;
+
+                    Log::info('Fixed user created from networkPlayers — linked whitelist entry and updated password', [
+                        'username' => $account->username,
+                    ]);
+                } elseif ($entry->pz_password_hash !== $pzPassword) {
                     // PZ password was changed — update web password
                     // PZ stores bcrypt hashes, so use directly; otherwise hash plain text
                     $existingUser->forceFill([

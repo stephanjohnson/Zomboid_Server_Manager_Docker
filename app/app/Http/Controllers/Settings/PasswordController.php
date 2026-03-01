@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\PasswordUpdateRequest;
+use App\Services\PzAccountAuthenticator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -43,10 +44,12 @@ class PasswordController extends Controller
     private function syncPzPassword(string $username, string $password): void
     {
         try {
+            $pzHash = PzAccountAuthenticator::hashForPz($password);
+
             DB::connection('pz_sqlite')
                 ->table('whitelist')
                 ->where('username', $username)
-                ->update(['password' => $password]);
+                ->update(['password' => $pzHash]);
 
             // Also update the tracked hash in PostgreSQL
             $user = \App\Models\User::where('username', $username)->first();
@@ -54,7 +57,7 @@ class PasswordController extends Controller
                 $user->whitelistEntries()
                     ->where('pz_username', $username)
                     ->update([
-                        'pz_password_hash' => $password,
+                        'pz_password_hash' => $pzHash,
                         'synced_at' => now(),
                     ]);
             }

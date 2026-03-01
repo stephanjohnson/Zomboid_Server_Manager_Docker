@@ -4,6 +4,7 @@ namespace App\Actions\Fortify;
 
 use App\Concerns\PasswordValidationRules;
 use App\Models\User;
+use App\Services\PzAccountAuthenticator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -35,16 +36,18 @@ class ResetUserPassword implements ResetsUserPasswords
     private function syncPzPassword(string $username, string $password): void
     {
         try {
+            $pzHash = PzAccountAuthenticator::hashForPz($password);
+
             DB::connection('pz_sqlite')
                 ->table('whitelist')
                 ->where('username', $username)
-                ->update(['password' => $password]);
+                ->update(['password' => $pzHash]);
 
             $user = User::where('username', $username)->first();
             $user?->whitelistEntries()
                 ->where('pz_username', $username)
                 ->update([
-                    'pz_password_hash' => $password,
+                    'pz_password_hash' => $pzHash,
                     'synced_at' => now(),
                 ]);
         } catch (\Exception $e) {

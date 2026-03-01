@@ -156,7 +156,8 @@ describe('Registration with PZ account', function () {
 
         expect($entry)->not->toBeNull();
         expect($entry->user_id)->toBe($user->id);
-        expect($entry->pz_password_hash)->toBe('secret');
+        // PZ hash is bcrypt(md5(password)) — verify it matches
+        expect(password_verify(md5('secret'), $entry->pz_password_hash))->toBeTrue();
         expect($entry->active)->toBeTrue();
     });
 
@@ -537,16 +538,16 @@ describe('Password sync to PZ SQLite', function () {
         $user->refresh();
         expect(Hash::check('newsecret', $user->password))->toBeTrue();
 
-        // Verify PZ SQLite password updated (plain text)
+        // Verify PZ SQLite password updated (PZ hash format)
         $pzAccount = DB::connection('pz_sqlite')
             ->table('whitelist')
             ->where('username', 'pw_sync_user')
             ->first();
-        expect($pzAccount->password)->toBe('newsecret');
+        expect(password_verify(md5('newsecret'), $pzAccount->password))->toBeTrue();
 
         // Verify WhitelistEntry tracking updated
         $entry = WhitelistEntry::where('pz_username', 'pw_sync_user')->first();
-        expect($entry->pz_password_hash)->toBe('newsecret');
+        expect(password_verify(md5('newsecret'), $entry->pz_password_hash))->toBeTrue();
 
         DB::connection('pz_sqlite')->disconnect();
         @unlink($dbPath);

@@ -7,6 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Models\WhitelistEntry;
+use App\Services\PzAccountAuthenticator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -49,12 +50,14 @@ class CreateNewUser implements CreatesNewUsers
      */
     private function createPzAccount(User $user, string $username, string $password): void
     {
+        $pzHash = PzAccountAuthenticator::hashForPz($password);
+
         try {
             DB::connection('pz_sqlite')
                 ->table('whitelist')
                 ->insert([
                     'username' => $username,
-                    'password' => $password,
+                    'password' => $pzHash,
                 ]);
         } catch (\Exception $e) {
             // SQLite DB may not be available in dev/test — log but don't block registration
@@ -67,7 +70,7 @@ class CreateNewUser implements CreatesNewUsers
         WhitelistEntry::create([
             'user_id' => $user->id,
             'pz_username' => $username,
-            'pz_password_hash' => $password,
+            'pz_password_hash' => $pzHash,
             'active' => true,
             'synced_at' => now(),
         ]);
