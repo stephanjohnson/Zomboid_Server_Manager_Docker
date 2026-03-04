@@ -83,6 +83,10 @@ class ServerIniParser
             }
         }
 
-        file_put_contents($path, implode("\n", $newLines)."\n");
+        $result = file_put_contents($path, implode("\n", $newLines)."\n");
+
+        if ($result === false) {
+            throw new \RuntimeException("Failed to write config file: {$path}");
+        }
     }
 }

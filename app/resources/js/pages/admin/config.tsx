@@ -206,7 +206,7 @@ function SettingInput({
 // ── Config section with collapsible groups ──────────────────────────
 
 type ConfigSectionHandle = {
-    save(): void;
+    save(): Promise<boolean>;
 };
 
 type ConfigSectionProps = {
@@ -216,7 +216,7 @@ type ConfigSectionProps = {
     meta: Record<string, SettingMeta>;
     groupOrder: string[];
     search: string;
-    onSave: (settings: Record<string, string>) => void;
+    onSave: (settings: Record<string, string>) => Promise<boolean>;
     onDirtyChange: (count: number) => void;
 };
 
@@ -262,14 +262,17 @@ const ConfigSection = forwardRef<ConfigSectionHandle, ConfigSectionProps>(functi
         }
     }
 
-    function handleSave() {
-        if (dirty.size === 0) return;
+    async function handleSave(): Promise<boolean> {
+        if (dirty.size === 0) return true;
         const changed: Record<string, string> = {};
         dirty.forEach((key) => {
             changed[key] = values[key];
         });
-        onSave(changed);
-        setDirty(new Set());
+        const success = await onSave(changed);
+        if (success) {
+            setDirty(new Set());
+        }
+        return success;
     }
 
     useImperativeHandle(ref, () => ({ save: handleSave }));
@@ -380,20 +383,25 @@ export default function Config({ server_config, sandbox_config, respawn_delay }:
 
     const totalDirty = serverDirty + sandboxDirty;
 
-    async function saveConfig(url: string, settings: Record<string, string>) {
+    async function saveConfig(url: string, settings: Record<string, string>): Promise<boolean> {
         setSaving(true);
-        await fetchAction(url, {
+        const result = await fetchAction(url, {
             method: 'PATCH',
             data: { settings },
             successMessage: 'Configuration saved',
         });
         setSaving(false);
+        return result !== null;
     }
 
-    function handleFloatingSave() {
-        serverRef.current?.save();
-        sandboxRef.current?.save();
-        setShowRestartDialog(true);
+    async function handleFloatingSave() {
+        const results = await Promise.all([
+            serverRef.current?.save() ?? Promise.resolve(true),
+            sandboxRef.current?.save() ?? Promise.resolve(true),
+        ]);
+        if (results.every(Boolean)) {
+            setShowRestartDialog(true);
+        }
     }
 
     async function handleRestart() {
@@ -406,8 +414,11 @@ export default function Config({ server_config, sandbox_config, respawn_delay }:
                 data.message = restartMessage.trim();
             }
         }
-        await fetchAction('/admin/server/restart', { data: Object.keys(data).length > 0 ? data : undefined });
+        const result = await fetchAction('/admin/server/restart', { data: Object.keys(data).length > 0 ? data : undefined });
         setRestartLoading(false);
+        if (result === null) {
+            return;
+        }
         setShowRestartDialog(false);
         setRestartCountdown('0');
         setRestartMessage('');

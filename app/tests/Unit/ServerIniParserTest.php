@@ -89,3 +89,7 @@ it('handles empty values', function () {
 
     expect($data['Password'])->toBe('');
 });
+
+it('throws when config file not found for write', function () {
+    $this->parser->write('/nonexistent/path/server.ini', ['MaxPlayers' => '32']);
+})->throws(RuntimeException::class, 'Config file not found');

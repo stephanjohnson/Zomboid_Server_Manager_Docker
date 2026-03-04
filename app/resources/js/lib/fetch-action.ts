@@ -29,7 +29,7 @@ export async function fetchAction(
             ? JSON.stringify({ _method: method })
             : undefined;
 
-    const headers: Record<string, string> = { 'X-CSRF-TOKEN': csrfToken };
+    const headers: Record<string, string> = { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' };
     if (spoofed) {
         headers['X-HTTP-Method-Override'] = method.toUpperCase();
     }

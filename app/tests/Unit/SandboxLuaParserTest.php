@@ -133,3 +133,7 @@ it('writes boolean strings as unquoted booleans', function () {
     expect($method->invoke($this->parser, 'true'))->toBe('true')
         ->and($method->invoke($this->parser, 'false'))->toBe('false');
 });
+
+it('throws when sandbox file not found for write', function () {
+    $this->parser->write('/nonexistent/path/sandbox.lua', ['Zombies' => 1]);
+})->throws(RuntimeException::class, 'Sandbox file not found');

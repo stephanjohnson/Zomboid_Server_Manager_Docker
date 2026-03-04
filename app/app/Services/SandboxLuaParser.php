@@ -47,7 +47,11 @@ class SandboxLuaParser
 
         $newLines = $this->updateLines($lines, $nested, null);
 
-        file_put_contents($path, implode("\n", $newLines)."\n");
+        $result = file_put_contents($path, implode("\n", $newLines)."\n");
+
+        if ($result === false) {
+            throw new \RuntimeException("Failed to write sandbox file: {$path}");
+        }
     }
 
     /**

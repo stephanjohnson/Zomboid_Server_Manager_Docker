@@ -45,6 +45,10 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             if ($response->getStatusCode() === 419) {
+                if ($request->expectsJson()) {
+                    return response()->json(['error' => 'The page expired, please try again.'], 419);
+                }
+
                 return back()->with([
                     'error' => 'The page expired, please try again.',
                 ]);
