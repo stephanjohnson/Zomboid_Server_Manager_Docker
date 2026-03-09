@@ -1,63 +1,397 @@
+<div align="center">
+
+<img src="app/public/favicon.svg" alt="Zomboid Manager" width="80" />
+
 # Zomboid Manager
 
-Web-based management panel for a Project Zomboid dedicated server. Control your server, manage players, mods, backups, and configuration — all from a browser.
+**Full-stack web panel for managing a Project Zomboid dedicated server.**
 
-## Requirements
+[![Laravel](https://img.shields.io/badge/Laravel-12-FF2D20?logo=laravel&logoColor=white)](https://laravel.com)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
-- Docker and Docker Compose v2
-- GNU Make
-- `openssl` (for secret generation during setup)
+[Features](#features) · [Quick Start](#quick-start) · [Screenshots](#screenshots) · [API Reference](#rest-api-reference) · [Architecture](#architecture)
+
+</div>
+
+---
+
+## Overview
+
+Zomboid Manager wraps a Dockerized Project Zomboid dedicated server with a Laravel REST API and a React + Inertia.js web dashboard. It provides remote management through three integration points:
+
+- **RCON** — Source RCON TCP protocol for real-time player commands, broadcasts, and saves
+- **Docker Engine API** — Container lifecycle control (start, stop, restart, update) via the Docker socket
+- **File I/O** — Direct read/write access to PZ config files (`server.ini`, sandbox Lua) mounted from the game server volume
+
+13 admin pages, a public status page, 30+ API endpoints, Discord notifications, an interactive player map, inventory management, safe zones, and more — all from a browser.
+
+## Feature Status
+
+| Area | Status | Notes |
+|---|---|---|
+| Docker Infrastructure | Done | Multi-arch (ARM64 + AMD64), auto-detection |
+| RCON Integration | Done | Custom PHP Source RCON client |
+| Server Control | Done | Start, stop, restart, save, wipe, update |
+| Configuration Editor | Done | server.ini + sandbox Lua, categorized UI |
+| Player Management | Done | Kick, ban, teleport, access levels, XP, god mode |
+| Mod Management | Done | Steam Workshop integration, drag-and-drop reorder |
+| Backup & Rollback | Done | Manual + scheduled, retention policies, queue-based |
+| Whitelist | Done | CRUD + sync with PZ's SQLite `serverPZ.db` |
+| Audit Logging | Done | Every admin action logged with user, IP, payload |
+| Web Dashboard | Done | React 19 + Inertia.js v2 + shadcn/ui |
+| Interactive Player Map | Done | Leaflet with live player markers |
+| Inventory Management | Done | Browse, give, remove items with 1,100+ icons |
+| Discord Webhooks | Done | 25+ configurable event notifications |
+| Safe Zones | Done | PvP-free areas with violation tracking |
+| Respawn Delay | Done | Configurable cooldown after death |
+| Moderation & Events | Done | PvP violations, event log, player action history |
+| RCON Console | Done | Browser-based console with command history |
+| Server Logs | Done | Live log viewer with filtering |
+| Authentication | Done | Fortify sessions, Sanctum tokens, API keys, 2FA |
+| User Settings | Done | Profile, password, appearance, two-factor setup |
+| Public Status Page | Done | Live server status, player count, uptime |
+| Lua Bridge Mod | Done | Server-side enforcement for safe zones + respawn |
+
+## Features
+
+### Server Control
+
+Start, stop, restart, save, wipe, and update the game server from the dashboard. Scheduled actions dispatch countdown warnings to in-game players before executing. Server updates pull the latest build via SteamCMD. Wipe requires double confirmation and creates a pre-wipe backup automatically.
+
+### Dashboard
+
+Real-time server overview: online status, player count, game time, uptime, memory usage, game version, and a player leaderboard.
+
+<details>
+<summary>Screenshot</summary>
+
+![Dashboard](docs/screenshots/dashboard.png)
+</details>
+
+### Player Management
+
+Full player table with search and filtering. Per-player actions: kick, ban/unban, set access level (admin, moderator, overseer, GM, observer, none), teleport, give items, add XP, toggle god mode. View detailed player profiles with stats and inventory links.
+
+<details>
+<summary>Screenshot</summary>
+
+![Players](docs/screenshots/players.png)
+</details>
+
+### Interactive Player Map
+
+Leaflet-based map rendered from PZ map tiles. Live player markers with position tracking. Click a player to view details or take action. Supports zoom levels and coordinates display.
+
+<details>
+<summary>Screenshot</summary>
+
+![Player Map](docs/screenshots/player-map.png)
+</details>
+
+### Inventory Management
+
+Browse a player's inventory with visual item icons (1,100+ icons sourced from PZwiki). Give items to online players via RCON with delivery status tracking. Remove items through the Lua bridge. Search and filter the item database.
+
+<details>
+<summary>Screenshot</summary>
+
+![Inventory](docs/screenshots/inventory.png)
+</details>
+
+### Configuration Editor
+
+Edit `server.ini` and sandbox settings from the browser. Settings are organized into categories with descriptions, input validation, and type-appropriate controls (toggles, sliders, dropdowns). Changes require a server restart to take effect — the UI prompts for it.
+
+<details>
+<summary>Screenshot</summary>
+
+![Config](docs/screenshots/config.png)
+</details>
+
+### Mod Management
+
+Add mods by Steam Workshop ID. The system keeps `WorkshopItems=` and `Mods=` lines in sync (paired entries, semicolon-separated). Drag-and-drop load order reordering. Remove mods with a single click. Requires a restart to apply.
+
+### Backup & Rollback
+
+Create manual backups or configure scheduled backups with per-type retention policies. Backups are created as queue jobs to avoid blocking the UI. Rollback to any previous backup with automatic pre-rollback snapshot. Backup types: manual, scheduled, pre-rollback, pre-update.
+
+<details>
+<summary>Screenshot</summary>
+
+![Backups](docs/screenshots/backups.png)
+</details>
+
+### Whitelist Management
+
+CRUD operations on the PZ whitelist stored in `serverPZ.db` (SQLite). Add, remove, and toggle player entries. Sync the whitelist from the game server's live database. Configure auto-whitelist behavior.
+
+### Safe Zones
+
+Define PvP-free rectangular zones on the map with coordinates. The Lua bridge mod enforces zones server-side. Violations are tracked with attacker/victim details, zone info, strike count, and coordinates. Resolve violations by dismissing or taking action. Toggle the entire system on/off.
+
+### Moderation & Events
+
+Centralized moderation view showing PvP violations, safe zone events, and player action history. Filter by player, zone, or event type. Escalating strike system for repeat offenders.
+
+### RCON Console
+
+Browser-based RCON console with command history. Send any RCON command and see the response in real time. Autocomplete for common commands.
+
+<details>
+<summary>Screenshot</summary>
+
+![RCON Console](docs/screenshots/rcon.png)
+</details>
+
+### Server Logs
+
+Live server log viewer with auto-refresh. Filter logs by type and search within log content. View logs from the game server's output directly in the browser.
+
+### Audit Logging
+
+Every admin action is recorded with: timestamp, user, action type, IP address, and full request payload. Browse, search, and filter the audit trail from the admin panel.
+
+### Discord Webhooks
+
+25+ configurable Discord webhook notifications across server control, backup management, player actions, safe zone events, and respawn delay changes. Per-event toggle. Test webhook delivery from the settings page. Rich embeds with color-coded categories and emoji.
+
+### Authentication & Security
+
+- **Web auth** — Laravel Fortify with session-based login
+- **Two-factor authentication** — TOTP with QR code setup, manual key entry, and recovery codes
+- **API auth** — API key via `X-API-Key` header for programmatic access
+- **Token auth** — Laravel Sanctum for token-based API access
+- **Role-based access** — Admin middleware protects all management routes
+
+### User Settings
+
+Four settings pages: profile (name, email), password, two-factor authentication setup, and appearance (theme/dark mode).
+
+### Public Status Page
+
+Unauthenticated server status page showing: online/offline state, current player count, player list, server name, map, and uptime. Designed for sharing with the community.
+
+<details>
+<summary>Screenshot</summary>
+
+![Status Page](docs/screenshots/status.png)
+</details>
+
+## Architecture
+
+Five Docker services across two networks:
+
+```
+                        Internet
+                           │
+              ┌────────────┼────────────────────────────────────┐
+              │            │                                    │
+              │   UDP 16261-16262          TCP 8000              │
+              │            │                  │                  │
+              │   ┌────────▼────────┐  ┌──────▼──────────────┐  │
+              │   │  game-server    │  │  app                │  │
+  zomboid-net │   │  PZ Dedicated   │◄─│  Laravel + Nginx    │  │
+   (bridge)   │   │  SteamCMD       │  │  React dashboard    │  │
+              │   │                 │  │  Docker socket      │  │
+              │   │  RCON 27015 ◄───│──│  (container ctrl)   │  │
+              │   └─────────────────┘  └──────┬──────────────┘  │
+              │                               │                 │
+              │                        ┌──────▼──────────────┐  │
+              │                        │  queue              │  │
+              │                        │  Backup jobs        │  │
+              │                        │  Restart jobs       │  │
+              │                        │  Scheduled tasks    │  │
+              │                        └──────┬──────────────┘  │
+              └───────────────────────────────┼─────────────────┘
+                                              │
+              ┌───────────────────────────────┼─────────────────┐
+              │                               │                 │
+  backend-net │   ┌──────────────┐     ┌──────▼──────┐          │
+  (internal)  │   │  db           │     │  redis      │          │
+              │   │  PostgreSQL 16│     │  Queue      │          │
+              │   │  App data     │     │  Cache      │          │
+              │   └──────────────┘     │  Sessions   │          │
+              │                        └─────────────┘          │
+              └─────────────────────────────────────────────────┘
+
+Volumes: pz-data, pz-server-files, pz-backups, pz-lua-bridge, pz-map-tiles, pz-postgres, pz-redis
+```
+
+- **game-server** — PZ dedicated server via SteamCMD. Auto-detects ARM64/AMD64 and selects the correct image.
+- **app** — Laravel 12 + React web panel. Mounts the Docker socket for container lifecycle control and PZ data volumes for config/save file access.
+- **queue** — Background job worker for backups, scheduled restarts, server updates, and other long-running tasks.
+- **db** — PostgreSQL 16. Users, backups, audit logs, PvP violations, settings.
+- **redis** — Job queue, cache, sessions, rate limiting.
 
 ## Quick Start
 
+### Requirements
+
+- Docker and Docker Compose v2
+- GNU Make
+- `openssl` (for secret generation)
+
+### Start
+
 ```bash
-git clone <repo-url> && cd Zomboid
+git clone <repo-url> && cd Zomboid_Server
 make up
 ```
 
-That's it. On first run this will:
+On first run this will:
 
 1. Generate `.env` with random passwords and keys
 2. Build the Docker images
-3. Start all services (game server, web app, database, redis)
+3. Start all five services
 4. Run database migrations automatically
 
-Open **http://localhost** to access the web panel.
-
-## First-Time Setup
-
-After `make up` finishes, create your admin account:
+### Create Admin Account
 
 ```bash
 make exec CMD="php artisan tinker --execute=\"App\Models\User::create(['name'=>'admin','email'=>'admin@example.com','password'=>bcrypt('your-password')])\""
 ```
 
-Then log in at **http://localhost/login**.
+### Open the Panel
+
+Navigate to **http://localhost:8000** and log in.
 
 ## Configuration
 
-Edit `.env` to customize your server before starting (or restart after changes):
+### Game Server Settings
 
 | Variable | Default | Description |
 |---|---|---|
-| `PZ_SERVER_NAME` | ZomboidServer | Server name shown in server browser |
-| `PZ_MAX_PLAYERS` | 16 | Maximum concurrent players |
-| `PZ_MAP_NAMES` | Muldraugh, KY | Map name |
-| `PZ_SERVER_PASSWORD` | *(empty)* | Password to join (empty = no password) |
-| `PZ_PUBLIC_SERVER` | true | List in public server browser |
-| `PZ_MAX_RAM` | 4096m | Java heap size for game server |
+| `PZ_SERVER_NAME` | `ZomboidServer` | Server name in the browser |
+| `PZ_MAX_PLAYERS` | `16` | Maximum concurrent players |
+| `PZ_MAP_NAMES` | `Muldraugh, KY` | Map name |
+| `PZ_SERVER_PASSWORD` | *(empty)* | Join password (empty = open) |
+| `PZ_PUBLIC_SERVER` | `true` | List in public server browser |
+| `PZ_MAX_RAM` | `4096m` | Java heap size |
 | `PZ_MOD_IDS` | *(empty)* | Semicolon-separated mod IDs |
-| `PZ_WORKSHOP_IDS` | *(empty)* | Semicolon-separated Workshop item IDs |
-| `APP_PORT` | 80 | Web panel port |
-| `TZ` | Asia/Tbilisi | Server timezone |
+| `PZ_WORKSHOP_IDS` | *(empty)* | Semicolon-separated Workshop IDs |
+| `PZ_PAUSE_ON_EMPTY` | `true` | Pause world when no players online |
+| `PZ_AUTOSAVE_INTERVAL` | `15` | Minutes between autosaves |
+| `PZ_STEAM_VAC` | `true` | Enable Steam VAC |
+| `PZ_GC_CONFIG` | `ZGC` | Java garbage collector |
 
-After editing `.env`, apply changes:
+### Application Settings
+
+| Variable | Default | Description |
+|---|---|---|
+| `APP_PORT` | `8000` | Web panel port |
+| `APP_URL` | `http://localhost:8000` | Public URL |
+| `APP_ENV` | `production` | Environment |
+| `APP_DEBUG` | `false` | Debug mode |
+| `TZ` | `Asia/Tbilisi` | Timezone |
+| `API_KEY` | *(auto-generated)* | API authentication key |
+
+### Backup Retention
+
+| Variable | Default | Description |
+|---|---|---|
+| `BACKUP_RETENTION_MANUAL` | `10` | Manual backups to keep |
+| `BACKUP_RETENTION_SCHEDULED` | `24` | Scheduled backups to keep |
+| `BACKUP_RETENTION_DAILY` | `7` | Daily backups to keep |
+| `BACKUP_RETENTION_PRE_ROLLBACK` | `5` | Pre-rollback snapshots to keep |
+| `BACKUP_RETENTION_PRE_UPDATE` | `3` | Pre-update snapshots to keep |
+
+After editing `.env`, restart to apply:
 
 ```bash
 make down && make up
 ```
 
+## Screenshots
+
+See the collapsible sections throughout [Features](#features) above for screenshots of each page.
+
+## REST API Reference
+
+Authenticated via `X-API-Key` header. The key is auto-generated in `.env` during first run.
+
+### Server
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/server/status` | No | Server status and player count |
+| `GET` | `/api/server/version` | Yes | Game version info |
+| `GET` | `/api/server/logs` | Yes | Server log output |
+| `POST` | `/api/server/start` | Yes | Start the game server |
+| `POST` | `/api/server/stop` | Yes | Stop the game server |
+| `POST` | `/api/server/restart` | Yes | Restart the game server |
+| `POST` | `/api/server/save` | Yes | Force a world save |
+| `POST` | `/api/server/broadcast` | Yes | Broadcast message to all players |
+| `POST` | `/api/server/update` | Yes | Update game server via SteamCMD |
+
+### Players
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/players` | Yes | List all players |
+| `GET` | `/api/players/{name}` | Yes | Player details |
+| `POST` | `/api/players/{name}/kick` | Yes | Kick player |
+| `POST` | `/api/players/{name}/ban` | Yes | Ban player |
+| `DELETE` | `/api/players/{name}/ban` | Yes | Unban player |
+| `POST` | `/api/players/{name}/setaccess` | Yes | Set access level |
+| `POST` | `/api/players/{name}/teleport` | Yes | Teleport player |
+| `POST` | `/api/players/{name}/additem` | Yes | Give item to player |
+| `POST` | `/api/players/{name}/addxp` | Yes | Add XP to player |
+| `POST` | `/api/players/{name}/godmode` | Yes | Toggle god mode |
+
+### Configuration
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/config/server` | Yes | Read server.ini settings |
+| `PATCH` | `/api/config/server` | Yes | Update server.ini settings |
+| `GET` | `/api/config/sandbox` | Yes | Read sandbox settings |
+| `PATCH` | `/api/config/sandbox` | Yes | Update sandbox settings |
+
+### Mods
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/config/mods` | Yes | List installed mods |
+| `POST` | `/api/config/mods` | Yes | Add a mod |
+| `DELETE` | `/api/config/mods/{workshopId}` | Yes | Remove a mod |
+| `PUT` | `/api/config/mods/order` | Yes | Reorder mod load order |
+
+### Backups
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/backups` | Yes | List backups |
+| `POST` | `/api/backups` | Yes | Create a backup |
+| `DELETE` | `/api/backups/{backup}` | Yes | Delete a backup |
+| `POST` | `/api/backups/{backup}/rollback` | Yes | Rollback to a backup |
+| `GET` | `/api/backups/schedule` | Yes | Get backup schedule |
+| `PUT` | `/api/backups/schedule` | Yes | Update backup schedule |
+
+### Whitelist
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/whitelist` | Yes | List whitelist entries |
+| `POST` | `/api/whitelist` | Yes | Add player to whitelist |
+| `DELETE` | `/api/whitelist/{username}` | Yes | Remove from whitelist |
+| `GET` | `/api/whitelist/{username}/status` | Yes | Check whitelist status |
+| `POST` | `/api/whitelist/sync` | Yes | Sync with game server |
+
+### Other
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/audit` | Yes | Audit log entries |
+| `GET` | `/api/health` | No | App health check |
+
 ## Commands
+
+### Core
 
 | Command | Description |
 |---|---|
@@ -67,116 +401,145 @@ make down && make up
 | `make stop` | Stop containers without removing them |
 | `make logs` | Follow logs from all containers |
 | `make ps` | Show running containers |
-| `make migrate` | Run database migrations manually |
-| `make test` | Run the test suite |
-| `make exec CMD="..."` | Run a command inside the app container |
 | `make build` | Rebuild Docker images without starting |
 | `make arch` | Show detected CPU architecture |
 
-`make test` forces `APP_ENV=testing` and an isolated in-memory SQLite database, so tests cannot wipe the live PostgreSQL data.
+### Database
 
-If you run tests manually, use:
+| Command | Description |
+|---|---|
+| `make migrate` | Run database migrations (auto-backs up first) |
+| `make db-init` | Create the Postgres volume (first run only) |
+| `make db-backup` | Dump Postgres to `db-backups/` |
+| `make db-restore` | Restore from the latest dump in `db-backups/` |
 
-```bash
-docker exec pz-app sh -lc 'cd /var/www/html && APP_ENV=testing APP_CONFIG_CACHE=/tmp/laravel-test-config.php DB_CONNECTION=sqlite DB_DATABASE=:memory: php artisan test'
+### Development
+
+| Command | Description |
+|---|---|
+| `make test` | Run the test suite (isolated SQLite, safe for production) |
+| `make exec CMD="..."` | Run a command inside the app container |
+
+### Danger Zone
+
+| Command | Description |
+|---|---|
+| `make db-reset` | Delete and recreate the Postgres volume (requires `RESET_DB` confirmation) |
+| `make nuke` | Destroy ALL data — database, game saves, backups (requires `NUKE_ALL` confirmation) |
+
+`make test` forces `APP_ENV=testing` with an in-memory SQLite database, so tests never touch production data.
+
+## Project Structure
+
 ```
-
-## Architecture
-
-Five Docker services:
-
+Zomboid_Server/
+├── app/                          # Laravel application
+│   ├── app/
+│   │   ├── Console/Commands/     # Artisan commands (ProcessRespawnKicks, etc.)
+│   │   ├── Http/Controllers/
+│   │   │   ├── Admin/            # Web dashboard controllers (13 controllers)
+│   │   │   ├── Api/              # REST API controllers
+│   │   │   └── Settings/         # User settings controllers
+│   │   ├── Jobs/                 # Queue jobs (backups, restarts, server updates)
+│   │   ├── Models/               # Eloquent models
+│   │   └── Services/             # Core services
+│   │       ├── RconClient.php        # Source RCON TCP client
+│   │       ├── DockerManager.php     # Docker Engine API client
+│   │       ├── ServerIniParser.php   # server.ini read/write
+│   │       ├── SandboxLuaParser.php  # Sandbox Lua read/write
+│   │       ├── SafeZoneManager.php   # Safe zone CRUD + violations
+│   │       ├── RespawnDelayManager.php
+│   │       ├── DiscordWebhookService.php
+│   │       └── AuditLogger.php
+│   ├── resources/js/
+│   │   ├── pages/                # React + Inertia pages (29 total)
+│   │   │   ├── admin/            # 13 admin pages
+│   │   │   ├── auth/             # 7 auth pages
+│   │   │   ├── settings/         # 4 settings pages
+│   │   │   ├── dashboard.tsx
+│   │   │   ├── status.tsx
+│   │   │   └── portal.tsx
+│   │   ├── components/           # Reusable UI components (shadcn/ui)
+│   │   └── lib/                  # Utilities (fetchAction, etc.)
+│   ├── routes/
+│   │   ├── api.php               # REST API routes
+│   │   ├── web.php               # Web routes
+│   │   └── settings.php          # Settings routes
+│   └── tests/                    # Pest PHP tests
+├── game-server/
+│   └── mods/ZomboidManager/      # Lua bridge mod (safe zones, respawn delay)
+├── docker-compose.yml            # Base Docker config
+├── docker-compose.arm64.yml      # ARM64 game server override
+├── docker-compose.amd64.yml      # AMD64 game server override
+├── Makefile                      # All CLI commands
+├── .env.example                  # Configuration template
+└── docs/screenshots/             # Screenshot assets
 ```
-┌─────────────────────────────────────────────────────────┐
-│  zomboid-net (bridge)                                   │
-│                                                         │
-│  ┌──────────────┐    RCON     ┌──────────────────────┐  │
-│  │ game-server   │◄──────────│ app (Laravel + Nginx) │  │
-│  │ PZ Dedicated  │            │ Port 80              │  │
-│  │ UDP 16261-2   │            └──────────┬───────────┘  │
-│  └──────────────┘                       │              │
-│                                          │              │
-│                              ┌──────────┴───────────┐  │
-│                              │ queue (worker)        │  │
-│                              └──────────┬───────────┘  │
-│                                          │              │
-│              ┌───────────────────────────┘              │
-│              │  backend-net (internal)                   │
-│     ┌────────┴──┐    ┌───────┐                          │
-│     │ PostgreSQL │    │ Redis │                          │
-│     └───────────┘    └───────┘                          │
-└─────────────────────────────────────────────────────────┘
-```
-
-- **game-server** — Project Zomboid dedicated server via SteamCMD. Auto-detects ARM64/AMD64.
-- **app** — Laravel 12 + React web panel. Manages the game server via RCON and Docker API.
-- **queue** — Background job worker (backups, scheduled restarts).
-- **db** — PostgreSQL 16 for app data (users, backups, audit logs).
-- **redis** — Cache, sessions, and job queue.
-
-## Web Panel Features
-
-**Public:**
-- Server status page with live player count and uptime
-
-**Admin (requires login):**
-- Dashboard with server overview
-- Player management (kick, ban, set access level, teleport, give items)
-- Server configuration editor (server.ini + sandbox settings)
-- Mod management (add/remove Steam Workshop mods)
-- Backup management (create, restore, delete, scheduled backups)
-- Whitelist management
-- RCON console with command history
-- Live server log viewer
-- Server controls (start, stop, restart, save)
-- Audit log of all admin actions
 
 ## Ports
 
-| Port | Protocol | Service |
-|---|---|---|
-| 80 (configurable) | TCP | Web panel |
-| 16261 | UDP | Game server |
-| 16262 | UDP | Game server (direct connect) |
+| Port | Protocol | Service | Exposure |
+|---|---|---|---|
+| `8000` | TCP | Web panel (Nginx) | Host — configurable via `APP_PORT` |
+| `16261` | UDP | Game server | Host — Steam game traffic |
+| `16262` | UDP | Game server (direct connect) | Host — Steam direct connect |
+| `27015` | TCP | RCON | Internal only — never exposed |
+| `5432` | TCP | PostgreSQL | Internal only |
+| `6379` | TCP | Redis | Internal only |
 
-RCON (27015/tcp) is internal only — never exposed to the host.
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Laravel 12 (PHP 8.3) |
+| Frontend | React 19, Inertia.js v2, TypeScript |
+| Styling | Tailwind CSS v4, shadcn/ui |
+| Database | PostgreSQL 16, Eloquent ORM |
+| Queue / Cache | Redis 7, Laravel Queue |
+| Game Server | SteamCMD, Project Zomboid Dedicated Server |
+| RCON | Custom PHP Source RCON client (`ext-sockets`) |
+| Container Orchestration | Docker Compose v2 (multi-arch) |
+| Auth | Laravel Fortify, Sanctum, TOTP 2FA |
+| Testing | Pest PHP 3 |
+| Routing | Laravel Wayfinder (TypeScript route generation) |
 
 ## Resetting
 
-To start fresh with new secrets:
+**Regenerate secrets:**
 
 ```bash
 make down
 rm .env
-make db-check || make db-init
 make up
 ```
 
-To wipe all data (database, game saves, backups), use the guarded command:
+**Reset the database:**
 
 ```bash
-make nuke
+make db-reset    # Requires typing RESET_DB
+make up
 ```
 
-Important safety behavior:
+**Nuke everything** (database, game saves, backups):
 
-- `make up` now refuses to start if `pz-postgres` is missing (prevents silent empty DB recreation).
-- Use `make db-init` only for first run (creates empty `pz-postgres` volume).
-- Use `make db-reset` only when you intentionally want a brand-new empty database.
-- Use `make db-restore` to restore from the newest SQL dump in `db-backups/`.
+```bash
+make nuke        # Requires typing NUKE_ALL
+```
 
-## API
+## Security Notes
 
-The app exposes a REST API authenticated via `X-API-Key` header. The key is auto-generated in `.env` during `make init`. Key endpoints:
+- RCON port (27015/tcp) is never exposed to the host — only accessible on the internal Docker network between containers
+- The `backend-net` network is marked `internal: true` — PostgreSQL and Redis are unreachable from outside Docker
+- API endpoints require an `X-API-Key` header; the key is auto-generated with 48 characters of entropy
+- All admin actions are recorded in the audit log with user, IP, and full request payload
+- Two-factor authentication available via TOTP with recovery codes
+- PZ passwords are hashed as `bcrypt(md5(password))` with a fixed salt — the app handles this separately from Laravel's auth system
+- Destructive operations (wipe, nuke, db-reset) require explicit confirmation strings
 
-- `GET /api/server/status` — Server status (no auth required)
-- `POST /api/server/start|stop|restart|save` — Server controls
-- `GET /api/players` — Online players
-- `GET /api/config/server` — Server configuration
-- `GET /api/mods` — Installed mods
-- `GET /api/backups` — Backup list
-- `GET /api/whitelist` — Whitelist entries
-- `GET /api/audit-logs` — Audit trail
+---
 
-## License
+<div align="center">
 
-Private project.
+Built for the Georgian Project Zomboid community
+
+</div>
