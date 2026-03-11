@@ -1,5 +1,6 @@
 # Environment
 .env
+.credentials.json
 
 # PHP / Composer
 /app/vendor/
