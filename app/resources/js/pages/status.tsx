@@ -14,7 +14,7 @@ export default function Status({
     server_name,
 }: StatusPageData) {
     usePoll(5000, { only: ['server', 'game_state'] });
-    const ping = usePing('/status', 15000);
+    const ping = usePing('/ping', 15000);
 
     return (
         <>

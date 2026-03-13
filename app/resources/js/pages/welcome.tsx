@@ -105,7 +105,7 @@ export default function Welcome({
     server_name,
     connection,
 }: WelcomePageData) {
-    const ping = usePing('/status', 15000);
+    const ping = usePing('/ping', 15000);
 
     return (
         <>

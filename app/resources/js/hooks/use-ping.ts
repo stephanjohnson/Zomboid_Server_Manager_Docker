@@ -9,8 +9,7 @@ export function usePing(url: string, intervalMs = 10000): number | null {
             try {
                 const start = performance.now();
                 await fetch(url, { method: 'HEAD', cache: 'no-store' });
-                const elapsed = Math.round(performance.now() - start);
-                setPing(elapsed);
+                setPing(Math.round((performance.now() - start) / 2));
             } catch {
                 setPing(null);
             }
