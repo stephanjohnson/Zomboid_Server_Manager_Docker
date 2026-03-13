@@ -46,10 +46,10 @@ it('filters by event type', function () {
     GameEvent::factory()->connect()->create();
 
     $this->actingAs($this->admin)
-        ->get(route('admin.moderation', ['event_types' => 'pvp_kill']))
+        ->get(route('admin.moderation', ['event_types' => 'pvp_hit']))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('filters.event_types', 'pvp_kill')
+            ->where('filters.event_types', 'pvp_hit')
         );
 });
 
@@ -58,7 +58,7 @@ it('filters by player name', function () {
     GameEvent::factory()->pvpKill()->create(['player' => 'OtherPlayer']);
 
     $this->actingAs($this->admin)
-        ->get(route('admin.moderation', ['player' => 'TestPlayer', 'event_types' => 'pvp_kill']))
+        ->get(route('admin.moderation', ['player' => 'TestPlayer', 'event_types' => 'pvp_hit']))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('filters.player', 'TestPlayer')
@@ -70,7 +70,7 @@ it('filters by date range', function () {
         ->get(route('admin.moderation', [
             'from' => '2026-01-01',
             'to' => '2026-01-31',
-            'event_types' => 'pvp_kill,death',
+            'event_types' => 'pvp_hit,death',
         ]))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
@@ -79,11 +79,11 @@ it('filters by date range', function () {
         );
 });
 
-it('defaults to pvp_kill and death event types', function () {
+it('defaults to pvp_hit and death event types', function () {
     $this->actingAs($this->admin)
         ->get(route('admin.moderation'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('filters.event_types', 'pvp_kill,death')
+            ->where('filters.event_types', 'pvp_hit,death')
         );
 });

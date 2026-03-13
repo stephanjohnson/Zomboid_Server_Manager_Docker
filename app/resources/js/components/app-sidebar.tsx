@@ -14,6 +14,8 @@ import {
     Shield,
     ShieldAlert,
     Terminal,
+    Trophy,
+    User,
     Users,
     Wrench,
 } from 'lucide-react';
@@ -104,6 +106,11 @@ const adminNavItems: NavItem[] = [
         href: '/admin/logs',
         icon: Activity,
     },
+    {
+        title: 'Rankings',
+        href: '/rankings',
+        icon: Trophy,
+    },
 ];
 
 const playerNavItems: NavItem[] = [
@@ -111,6 +118,11 @@ const playerNavItems: NavItem[] = [
         title: 'Player Portal',
         href: '/portal',
         icon: Gamepad2,
+    },
+    {
+        title: 'Rankings',
+        href: '/rankings',
+        icon: Trophy,
     },
 ];
 
@@ -127,7 +139,16 @@ const adminRoles = ['super_admin', 'admin', 'moderator'];
 export function AppSidebar() {
     const { auth } = usePage<{ auth: Auth }>().props;
     const isAdmin = adminRoles.includes(auth.user.role);
-    const navItems = isAdmin ? adminNavItems : playerNavItems;
+
+    const myStatsItem: NavItem = {
+        title: 'My Stats',
+        href: `/rankings/${auth.user.username}`,
+        icon: User,
+    };
+
+    const navItems = isAdmin
+        ? [...adminNavItems, myStatsItem]
+        : [...playerNavItems, myStatsItem];
 
     return (
         <Sidebar collapsible="icon" variant="inset">

@@ -152,7 +152,7 @@ class LogExtenderParser
             // Log Extender: user PlayerA (x,y,z) hit user PlayerB (x,y,z) with Weapon damage N
             if (preg_match('/user\s+(\S+)\s+\((\d+),(\d+),\d+\)\s+hit\s+user\s+(\S+)\s+\((\d+),(\d+),\d+\)\s+with\s+(.+?)(?:\s+damage\s+(.+))?$/i', $rest, $matches)) {
                 GameEvent::query()->create([
-                    'event_type' => 'pvp_kill',
+                    'event_type' => 'pvp_hit',
                     'player' => $matches[1],
                     'target' => $matches[4],
                     'x' => (int) $matches[2],
@@ -178,7 +178,7 @@ class LogExtenderParser
                 }
 
                 GameEvent::query()->create([
-                    'event_type' => 'pvp_kill',
+                    'event_type' => 'pvp_hit',
                     'player' => $matches[1],
                     'target' => $matches[4],
                     'x' => (int) $matches[2],

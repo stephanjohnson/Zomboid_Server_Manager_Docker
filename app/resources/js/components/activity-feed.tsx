@@ -3,7 +3,7 @@ import type { GameEventEntry } from '@/types';
 
 const eventConfig: Record<string, { icon: typeof Skull; label: string; color: string }> = {
     death: { icon: Skull, label: 'Died', color: 'text-red-500' },
-    pvp_kill: { icon: Swords, label: 'PvP Kill', color: 'text-orange-500' },
+    pvp_hit: { icon: Swords, label: 'PvP Hit', color: 'text-orange-500' },
     craft: { icon: Hammer, label: 'Crafted', color: 'text-blue-500' },
     connect: { icon: LogIn, label: 'Joined', color: 'text-green-500' },
     disconnect: { icon: LogOut, label: 'Left', color: 'text-muted-foreground' },
@@ -14,8 +14,8 @@ function formatEventDescription(event: GameEventEntry): string {
     switch (event.event_type) {
         case 'death':
             return `${event.player} died`;
-        case 'pvp_kill':
-            return `${event.player} killed ${event.target ?? 'someone'}${details?.weapon ? ` with ${details.weapon}` : ''}`;
+        case 'pvp_hit':
+            return `${event.player} hit ${event.target ?? 'someone'}${details?.weapon ? ` with ${details.weapon}` : ''}`;
         case 'craft':
             return `${event.player} crafted ${details?.quantity ?? 1}x ${(details?.item as string)?.replace('Base.', '') ?? 'item'}`;
         case 'connect':

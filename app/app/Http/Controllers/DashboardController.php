@@ -6,6 +6,8 @@ use App\Models\AuditLog;
 use App\Models\AutoRestartSetting;
 use App\Models\Backup;
 use App\Models\GameEvent;
+use App\Models\PlayerStat;
+use App\Models\ServerSetting;
 use App\Services\GameStateReader;
 use App\Services\PlayerStatsService;
 use App\Services\ServerStatusResolver;
@@ -24,12 +26,32 @@ class DashboardController extends Controller
     {
         $resolved = $this->statusResolver->resolve();
 
+        // Enrich online players with stats data
+        $playerNames = $resolved['players'] ?? [];
+        $enrichedPlayers = [];
+        if (! empty($playerNames)) {
+            $stats = PlayerStat::query()
+                ->whereIn('username', $playerNames)
+                ->get()
+                ->keyBy('username');
+
+            foreach ($playerNames as $name) {
+                $stat = $stats->get($name);
+                $enrichedPlayers[] = [
+                    'username' => $name,
+                    'zombie_kills' => $stat?->zombie_kills,
+                    'hours_survived' => $stat?->hours_survived,
+                    'profession' => $stat?->profession,
+                ];
+            }
+        }
+
         $server = [
             'online' => $resolved['online'],
             'status' => $resolved['game_status'],
             'container_status' => $resolved['container_status'],
             'player_count' => $resolved['player_count'],
-            'players' => $resolved['players'],
+            'players' => $enrichedPlayers,
             'uptime' => $resolved['uptime'],
             'map' => $resolved['map'],
             'max_players' => $resolved['max_players'],
@@ -106,6 +128,8 @@ class DashboardController extends Controller
                     'created_at' => $event->created_at?->toIso8601String(),
                 ])
                 ->all()),
+            'server_totals' => Inertia::defer(fn () => $this->playerStatsService->getServerStats()),
+            'connection' => ServerSetting::instance()->only('server_ip', 'server_port'),
         ]);
     }
 

@@ -21,7 +21,7 @@ class ModerationController extends Controller
         $mapConfig = $this->mapConfigBuilder->build();
 
         $filters = [
-            'event_types' => $request->validated('event_types', 'pvp_kill,death'),
+            'event_types' => $request->validated('event_types', 'pvp_hit,death'),
             'player' => $request->validated('player'),
             'from' => $request->validated('from'),
             'to' => $request->validated('to'),

@@ -2,16 +2,18 @@
 
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PlayerProfileController;
 use App\Http\Controllers\PortalController;
+use App\Http\Controllers\RankingsController;
 use App\Http\Controllers\StatusController;
+use App\Http\Controllers\WelcomeController;
 use Illuminate\Support\Facades\Route;
-use Laravel\Fortify\Features;
 
-Route::inertia('/', 'welcome', [
-    'canRegister' => Features::enabled(Features::registration()),
-])->name('home');
+Route::get('/', WelcomeController::class)->name('home');
 
 Route::get('status', StatusController::class)->name('status');
+Route::get('rankings', RankingsController::class)->name('rankings');
+Route::get('rankings/{username}', PlayerProfileController::class)->name('rankings.player');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('portal', PortalController::class)->name('portal');
@@ -97,6 +99,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         Route::post('safe-zones', [Admin\SafeZoneController::class, 'store'])->name('safe-zones.store');
         Route::delete('safe-zones/{zoneId}', [Admin\SafeZoneController::class, 'destroy'])->name('safe-zones.destroy');
         Route::post('safe-zones/violations/{id}/resolve', [Admin\SafeZoneController::class, 'resolveViolation'])->name('safe-zones.violations.resolve');
+
+        // Server Settings (connection info)
+        Route::patch('server-settings', [Admin\ServerSettingController::class, 'update'])->name('server-settings.update');
 
         // Server Control
         Route::post('server/start', [Admin\ServerController::class, 'start'])->name('server.start');

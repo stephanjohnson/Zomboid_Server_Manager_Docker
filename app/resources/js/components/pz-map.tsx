@@ -201,7 +201,7 @@ function latLngToPz(ll: L.LatLng): { x: number; y: number } {
 }
 
 const eventTypeColors: Record<string, string> = {
-    pvp_kill: '#ef4444',
+    pvp_hit: '#ef4444',
     death: '#9ca3af',
     connect: '#22c55e',
     disconnect: '#f59e0b',

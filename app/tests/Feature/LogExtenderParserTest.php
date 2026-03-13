@@ -100,7 +100,7 @@ LOG;
     expect($count)->toBe(1);
 
     $event = GameEvent::first();
-    expect($event->event_type)->toBe('pvp_kill')
+    expect($event->event_type)->toBe('pvp_hit')
         ->and($event->player)->toBe('Alice')
         ->and($event->target)->toBe('Bob')
         ->and($event->x)->toBe(10883)
@@ -231,7 +231,7 @@ LOG;
     expect($count)->toBe(1);
 
     $event = GameEvent::first();
-    expect($event->event_type)->toBe('pvp_kill')
+    expect($event->event_type)->toBe('pvp_hit')
         ->and($event->player)->toBe('kirtoius')
         ->and($event->target)->toBe('admin')
         ->and($event->x)->toBe(8148)

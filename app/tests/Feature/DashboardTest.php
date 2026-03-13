@@ -69,7 +69,10 @@ it('shows server status on the dashboard', function () {
         ->component('dashboard')
         ->where('server.online', true)
         ->where('server.player_count', 3)
-        ->where('server.players', ['Alice', 'Bob', 'Charlie'])
+        ->has('server.players', 3)
+        ->where('server.players.0.username', 'Alice')
+        ->where('server.players.1.username', 'Bob')
+        ->where('server.players.2.username', 'Charlie')
     );
 });
 

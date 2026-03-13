@@ -1,11 +1,11 @@
-import { Head, Link, usePage, usePoll } from '@inertiajs/react';
-import { Circle, Clock, Globe, Map, Monitor, Package, Users } from 'lucide-react';
+import { Head, usePoll } from '@inertiajs/react';
+import { Circle, Clock, Map, Package, Users } from 'lucide-react';
 import { GameStateWidget } from '@/components/game-state-widget';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { usePing } from '@/hooks/use-ping';
+import PublicLayout from '@/layouts/public-layout';
 import type { StatusPageData } from '@/types';
-import { login, register } from '@/routes';
 
 export default function Status({
     server,
@@ -13,48 +13,13 @@ export default function Status({
     mods,
     server_name,
 }: StatusPageData) {
-    const { auth } = usePage().props;
-
     usePoll(5000, { only: ['server', 'game_state'] });
+    const ping = usePing('/status', 15000);
 
     return (
         <>
             <Head title={`${server_name} — Server Status`} />
-            <div className="min-h-screen bg-background">
-                {/* Header */}
-                <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                    <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-                        <Link href="/" className="text-lg font-semibold tracking-tight">
-                            Zomboid Manager
-                        </Link>
-                        <nav className="flex items-center gap-3">
-                            {auth.user ? (
-                                <Link
-                                    href="/dashboard"
-                                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                                >
-                                    Dashboard
-                                </Link>
-                            ) : (
-                                <>
-                                    <Link
-                                        href={login()}
-                                        className="rounded-md px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-                                    >
-                                        Log in
-                                    </Link>
-                                    <Link
-                                        href={register()}
-                                        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                                    >
-                                        Register
-                                    </Link>
-                                </>
-                            )}
-                        </nav>
-                    </div>
-                </header>
-
+            <PublicLayout>
                 {/* Content */}
                 <main className="mx-auto max-w-5xl px-4 py-8">
                     {/* Server Status Hero */}
@@ -83,6 +48,9 @@ export default function Status({
                                       ? 'Starting'
                                       : 'Offline'}
                             </span>
+                            {ping !== null && server.status === 'online' && (
+                                <span className="text-sm text-muted-foreground">— {ping}ms</span>
+                            )}
                         </div>
                     </div>
 
@@ -219,14 +187,7 @@ export default function Status({
                         </Card>
                     </div>
                 </main>
-
-                {/* Footer */}
-                <footer className="mt-12 border-t border-border/40 py-6">
-                    <div className="mx-auto max-w-5xl px-4 text-center text-sm text-muted-foreground">
-                        Powered by Zomboid Manager
-                    </div>
-                </footer>
-            </div>
+            </PublicLayout>
         </>
     );
 }

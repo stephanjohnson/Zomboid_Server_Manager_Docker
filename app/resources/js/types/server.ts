@@ -1,14 +1,38 @@
+export type OnlinePlayer = {
+    username: string;
+    zombie_kills?: number | null;
+    hours_survived?: number | null;
+    profession?: string | null;
+};
+
 export type ServerStatus = {
     online: boolean;
     status: 'offline' | 'starting' | 'online';
     container_status?: string;
     player_count: number;
-    players: string[];
+    players: OnlinePlayer[];
     uptime: string | null;
     map: string | null;
     max_players: number | null;
     game_version: string | null;
     steam_branch: string | null;
+};
+
+export type WelcomeServerStatus = {
+    online: boolean;
+    status: 'offline' | 'starting' | 'online';
+    player_count: number;
+    players: string[];
+    map: string | null;
+};
+
+export type ServerStats = {
+    total_players: number;
+    total_zombie_kills: number;
+    total_hours_survived: number;
+    total_deaths: number;
+    total_pvp_hits: number;
+    most_popular_profession: string | null;
 };
 
 export type ModEntry = {
@@ -86,7 +110,7 @@ export type Leaderboard = {
 
 export type GameEventEntry = {
     id: number;
-    event_type: 'death' | 'pvp_kill' | 'craft' | 'connect' | 'disconnect';
+    event_type: 'death' | 'pvp_hit' | 'craft' | 'connect' | 'disconnect';
     player: string;
     target: string | null;
     details: Record<string, unknown> | null;
@@ -102,6 +126,11 @@ export type AutoRestartInfo = {
     interval_hours: number;
 };
 
+export type ConnectionInfo = {
+    server_ip: string;
+    server_port: string;
+};
+
 export type DashboardData = {
     server: ServerStatus;
     auto_restart: AutoRestartInfo;
@@ -110,10 +139,80 @@ export type DashboardData = {
     backup_summary: BackupSummary;
     leaderboard: Leaderboard;
     game_events: GameEventEntry[];
+    server_totals: ServerStats;
+    connection: ConnectionInfo;
+};
+
+export type LeaderboardEntry = {
+    rank: number;
+    username: string;
+    zombie_kills: number;
+    hours_survived: number;
+    profession: string | null;
+    is_dead: boolean;
+};
+
+export type DeathLeaderboardEntry = {
+    rank: number;
+    username: string;
+    death_count: number;
+};
+
+export type PlayerProfile = {
+    username: string;
+    zombie_kills: number;
+    hours_survived: number;
+    profession: string | null;
+    skills: Record<string, number> | null;
+    is_dead: boolean;
+    ranks: {
+        kills: number;
+        survival: number;
+        deaths: number;
+    };
+    event_counts: {
+        death: number;
+        pvp_hit: number;
+        craft: number;
+        connect: number;
+    };
+    recent_events: GameEventEntry[];
+};
+
+export type RankingsPageData = {
+    server_stats: ServerStats;
+    leaderboard_kills: LeaderboardEntry[];
+    leaderboard_survival: LeaderboardEntry[];
+    leaderboard_deaths: DeathLeaderboardEntry[];
+    server_name: string;
+};
+
+export type PlayerProfilePageData = {
+    player: PlayerProfile;
+    recent_events: GameEventEntry[];
+};
+
+export type WelcomePageData = {
+    canRegister: boolean;
+    server: WelcomeServerStatus;
+    server_stats: ServerStats;
+    top_players: PlayerStatEntry[];
+    server_name: string;
+    connection: { ip: string; port: string };
+};
+
+export type StatusServerStatus = {
+    online: boolean;
+    status: 'offline' | 'starting' | 'online';
+    player_count: number;
+    players: string[];
+    uptime: string | null;
+    map: string | null;
+    max_players: number | null;
 };
 
 export type StatusPageData = {
-    server: ServerStatus;
+    server: StatusServerStatus;
     game_state: GameState | null;
     mods: ModEntry[];
     server_name: string;

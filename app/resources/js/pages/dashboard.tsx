@@ -1,44 +1,47 @@
-import { Deferred, Head, router, usePoll } from '@inertiajs/react';
+import { Deferred, Head, Link, router, usePoll } from '@inertiajs/react';
 import {
     Archive,
     ArrowUpCircle,
     Circle,
+    Clock,
+    Globe,
     HardDrive,
     Map,
+    Pencil,
     Play,
     RefreshCw,
     Save,
     ScrollText,
+    Skull,
     Square,
+    Swords,
     Timer,
     Trash2,
+    Trophy,
     Users,
     Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { ActivityFeed } from '@/components/activity-feed';
+import { AnimatedCounter } from '@/components/animated-counter';
 import { GameStateWidget } from '@/components/game-state-widget';
 import { Leaderboard } from '@/components/leaderboard';
+import { RestartDialog, StopDialog, UpdateDialog, WipeDialog } from '@/components/server-action-dialogs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
+    DialogClose,
     DialogContent,
     DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
+    DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import AppLayout from '@/layouts/app-layout';
 import { fetchAction } from '@/lib/fetch-action';
@@ -52,17 +55,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-const COUNTDOWN_OPTIONS = [
-    { value: '0', label: 'Immediately' },
-    { value: '60', label: '1 minute' },
-    { value: '120', label: '2 minutes' },
-    { value: '300', label: '5 minutes' },
-    { value: '600', label: '10 minutes' },
-    { value: '900', label: '15 minutes' },
-    { value: '1800', label: '30 minutes' },
-    { value: '3600', label: '60 minutes' },
-] as const;
-
 export default function Dashboard({
     server,
     auto_restart,
@@ -71,26 +63,29 @@ export default function Dashboard({
     backup_summary,
     leaderboard,
     game_events,
+    server_totals,
+    connection,
 }: DashboardData) {
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [showRestartDialog, setShowRestartDialog] = useState(false);
-    const [restartCountdown, setRestartCountdown] = useState('0');
-    const [restartMessage, setRestartMessage] = useState('');
-    const [restartLoading, setRestartLoading] = useState(false);
     const [showStopDialog, setShowStopDialog] = useState(false);
-    const [stopCountdown, setStopCountdown] = useState('0');
-    const [stopMessage, setStopMessage] = useState('');
-    const [stopLoading, setStopLoading] = useState(false);
     const [showWipeDialog, setShowWipeDialog] = useState(false);
-    const [wipeCountdown, setWipeCountdown] = useState('0');
-    const [wipeMessage, setWipeMessage] = useState('');
-    const [wipeLoading, setWipeLoading] = useState(false);
-    const [wipeConfirmStep, setWipeConfirmStep] = useState(0);
     const [showUpdateDialog, setShowUpdateDialog] = useState(false);
-    const [updateBranch, setUpdateBranch] = useState(server.steam_branch ?? 'public');
-    const [updateCountdown, setUpdateCountdown] = useState('0');
-    const [updateMessage, setUpdateMessage] = useState('');
-    const [updateLoading, setUpdateLoading] = useState(false);
+    const [connIp, setConnIp] = useState(connection.server_ip);
+    const [connPort, setConnPort] = useState(connection.server_port);
+    const [connOpen, setConnOpen] = useState(false);
+    const [connSaving, setConnSaving] = useState(false);
+
+    async function saveConnection() {
+        setConnSaving(true);
+        await fetchAction('/admin/server-settings', {
+            method: 'PATCH',
+            data: { server_ip: connIp, server_port: connPort },
+        });
+        setConnSaving(false);
+        setConnOpen(false);
+        router.reload({ only: ['connection'] });
+    }
 
     usePoll(5000, { only: ['server', 'game_state', 'auto_restart'] });
 
@@ -101,99 +96,26 @@ export default function Dashboard({
         setTimeout(() => router.reload({ only: ['server'] }), 2000);
     }
 
-    async function handleRestart() {
-        setRestartLoading(true);
-        const countdown = parseInt(restartCountdown, 10);
-        const data: Record<string, unknown> = {};
-        if (countdown > 0) {
-            data.countdown = countdown;
-            if (restartMessage.trim()) {
-                data.message = restartMessage.trim();
-            }
-        }
-        await fetchAction('/admin/server/restart', { data: Object.keys(data).length > 0 ? data : undefined });
-        setRestartLoading(false);
-        setShowRestartDialog(false);
-        setRestartCountdown('0');
-        setRestartMessage('');
-        setTimeout(() => router.reload({ only: ['server'] }), 2000);
-    }
-
-    async function handleStop() {
-        setStopLoading(true);
-        const countdown = parseInt(stopCountdown, 10);
-        const data: Record<string, unknown> = {};
-        if (countdown > 0) {
-            data.countdown = countdown;
-            if (stopMessage.trim()) {
-                data.message = stopMessage.trim();
-            }
-        }
-        await fetchAction('/admin/server/stop', { data: Object.keys(data).length > 0 ? data : undefined });
-        setStopLoading(false);
-        setShowStopDialog(false);
-        setStopCountdown('0');
-        setStopMessage('');
-        setTimeout(() => router.reload({ only: ['server'] }), 2000);
-    }
-
-    async function handleWipe() {
-        if (wipeConfirmStep < 2) {
-            setWipeConfirmStep(wipeConfirmStep + 1);
-            return;
-        }
-        setWipeLoading(true);
-        const countdown = parseInt(wipeCountdown, 10);
-        const data: Record<string, unknown> = {};
-        if (countdown > 0) {
-            data.countdown = countdown;
-            if (wipeMessage.trim()) {
-                data.message = wipeMessage.trim();
-            }
-        }
-        await fetchAction('/admin/server/wipe', { data: Object.keys(data).length > 0 ? data : undefined });
-        setWipeLoading(false);
-        setShowWipeDialog(false);
-        setWipeCountdown('0');
-        setWipeMessage('');
-        setWipeConfirmStep(0);
-        setTimeout(() => router.reload({ only: ['server'] }), 2000);
-    }
-
-    async function handleUpdate() {
-        setUpdateLoading(true);
-        const countdown = parseInt(updateCountdown, 10);
-        const data: Record<string, unknown> = {};
-        if (updateBranch !== (server.steam_branch ?? 'public')) {
-            data.branch = updateBranch;
-        }
-        if (countdown > 0) {
-            data.countdown = countdown;
-            if (updateMessage.trim()) {
-                data.message = updateMessage.trim();
-            }
-        }
-        await fetchAction('/admin/server/update', { data: Object.keys(data).length > 0 ? data : undefined });
-        setUpdateLoading(false);
-        setShowUpdateDialog(false);
-        setUpdateCountdown('0');
-        setUpdateMessage('');
-        setTimeout(() => router.reload({ only: ['server'] }), 2000);
-    }
+    const statusBgClass =
+        server.status === 'online'
+            ? 'bg-green-500/5 border-green-500/20'
+            : server.status === 'starting'
+              ? 'bg-amber-500/5 border-amber-500/20'
+              : 'bg-red-500/5 border-red-500/20';
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4 lg:p-6">
                 {/* Server Status Banner */}
-                <div className="flex flex-col gap-3 rounded-lg border border-border/50 bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-3">
+                <div className={`flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${statusBgClass}`}>
+                    <div className="flex flex-wrap items-center gap-3">
                         <Circle
                             className={`size-4 fill-current ${
                                 server.status === 'online'
                                     ? 'text-green-500'
                                     : server.status === 'starting'
-                                      ? 'text-yellow-500'
+                                      ? 'animate-pulse text-yellow-500'
                                       : 'text-red-500'
                             }`}
                         />
@@ -276,10 +198,7 @@ export default function Dashboard({
                             variant="outline"
                             size="sm"
                             disabled={actionLoading !== null}
-                            onClick={() => {
-                                setUpdateBranch(server.steam_branch ?? 'public');
-                                setShowUpdateDialog(true);
-                            }}
+                            onClick={() => setShowUpdateDialog(true)}
                         >
                             <ArrowUpCircle className="mr-1.5 size-3.5" />
                             Update
@@ -288,10 +207,7 @@ export default function Dashboard({
                             variant="destructive"
                             size="sm"
                             disabled={actionLoading !== null}
-                            onClick={() => {
-                                setWipeConfirmStep(0);
-                                setShowWipeDialog(true);
-                            }}
+                            onClick={() => setShowWipeDialog(true)}
                         >
                             <Trash2 className="mr-1.5 size-3.5" />
                             Wipe
@@ -307,10 +223,10 @@ export default function Dashboard({
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Players Online</CardTitle>
-                            <Users className="size-4 text-muted-foreground" />
+                            <Users className="size-4 text-blue-500" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">
+                            <div className="text-3xl font-bold">
                                 {server.player_count}
                                 {server.max_players !== null && (
                                     <span className="text-base font-normal text-muted-foreground">
@@ -318,16 +234,88 @@ export default function Dashboard({
                                     </span>
                                 )}
                             </div>
+                            {server.max_players !== null && server.max_players > 0 && (
+                                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                    <div
+                                        className="h-full rounded-full bg-blue-500 transition-all"
+                                        style={{ width: `${Math.min((server.player_count / server.max_players) * 100, 100)}%` }}
+                                    />
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Map</CardTitle>
-                            <Map className="size-4 text-muted-foreground" />
+                            <Map className="size-4 text-green-500" />
                         </CardHeader>
                         <CardContent>
-                            <div className="truncate text-2xl font-bold">{server.map || 'N/A'}</div>
+                            <div className="truncate text-3xl font-bold">{server.map || 'N/A'}</div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Connection</CardTitle>
+                            <Dialog open={connOpen} onOpenChange={(open) => {
+                                setConnOpen(open);
+                                if (open) {
+                                    setConnIp(connection.server_ip);
+                                    setConnPort(connection.server_port);
+                                }
+                            }}>
+                                <DialogTrigger asChild>
+                                    <button className="text-muted-foreground hover:text-foreground">
+                                        <Pencil className="size-4" />
+                                    </button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-md">
+                                    <DialogHeader>
+                                        <DialogTitle>Connection Settings</DialogTitle>
+                                        <DialogDescription>
+                                            Set the public IP and port shown to players on the welcome page.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-4 py-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="conn-ip">Server IP</Label>
+                                            <Input
+                                                id="conn-ip"
+                                                value={connIp}
+                                                onChange={(e) => setConnIp(e.target.value)}
+                                                placeholder="123.45.67.89"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="conn-port">Port</Label>
+                                            <Input
+                                                id="conn-port"
+                                                value={connPort}
+                                                onChange={(e) => setConnPort(e.target.value)}
+                                                placeholder="16261"
+                                            />
+                                        </div>
+                                    </div>
+                                    <DialogFooter>
+                                        <DialogClose asChild>
+                                            <Button variant="outline">Cancel</Button>
+                                        </DialogClose>
+                                        <Button onClick={saveConnection} disabled={connSaving}>
+                                            {connSaving ? 'Saving...' : 'Save'}
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </CardHeader>
+                        <CardContent>
+                            {connection.server_ip ? (
+                                <div className="truncate font-mono text-sm font-bold">
+                                    {connection.server_ip}:{connection.server_port}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">Not configured</p>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -336,20 +324,20 @@ export default function Dashboard({
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                                     <CardTitle className="text-sm font-medium text-muted-foreground">Backups</CardTitle>
-                                    <Archive className="size-4 text-muted-foreground" />
+                                    <Archive className="size-4 text-purple-500" />
                                 </CardHeader>
                                 <CardContent>
-                                    <Skeleton className="h-8 w-12" />
+                                    <Skeleton className="h-9 w-12" />
                                     <Skeleton className="mt-1 h-3 w-20" />
                                 </CardContent>
                             </Card>
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                                     <CardTitle className="text-sm font-medium text-muted-foreground">Last Backup</CardTitle>
-                                    <HardDrive className="size-4 text-muted-foreground" />
+                                    <HardDrive className="size-4 text-orange-500" />
                                 </CardHeader>
                                 <CardContent>
-                                    <Skeleton className="h-8 w-24" />
+                                    <Skeleton className="h-9 w-24" />
                                 </CardContent>
                             </Card>
                         </>
@@ -357,20 +345,20 @@ export default function Dashboard({
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
                                 <CardTitle className="text-sm font-medium text-muted-foreground">Backups</CardTitle>
-                                <Archive className="size-4 text-muted-foreground" />
+                                <Archive className="size-4 text-purple-500" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">{backup_summary?.total_count}</div>
+                                <div className="text-3xl font-bold">{backup_summary?.total_count}</div>
                                 <p className="text-xs text-muted-foreground">{backup_summary?.total_size_human} total</p>
                             </CardContent>
                         </Card>
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
                                 <CardTitle className="text-sm font-medium text-muted-foreground">Last Backup</CardTitle>
-                                <HardDrive className="size-4 text-muted-foreground" />
+                                <HardDrive className="size-4 text-orange-500" />
                             </CardHeader>
                             <CardContent>
-                                <div className="truncate text-2xl font-bold">
+                                <div className="truncate text-3xl font-bold">
                                     {backup_summary?.last_backup
                                         ? new Date(backup_summary.last_backup.created_at).toLocaleDateString()
                                         : 'Never'}
@@ -385,14 +373,97 @@ export default function Dashboard({
                     </Deferred>
                 </div>
 
+                {/* Server Totals Ribbon */}
+                <Deferred data="server_totals" fallback={
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="flex items-center gap-3 rounded-lg border border-border/50 bg-card px-4 py-3">
+                                <Skeleton className="size-8 rounded" />
+                                <div className="space-y-1">
+                                    <Skeleton className="h-3 w-16" />
+                                    <Skeleton className="h-5 w-12" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                }>
+                    {server_totals && (
+                        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                            <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card px-4 py-3">
+                                <div className="flex size-8 items-center justify-center rounded bg-blue-500/10">
+                                    <Users className="size-4 text-blue-500" />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Total Players</p>
+                                    <p className="text-lg font-semibold tabular-nums">
+                                        <AnimatedCounter value={server_totals.total_players} />
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card px-4 py-3">
+                                <div className="flex size-8 items-center justify-center rounded bg-red-500/10">
+                                    <Skull className="size-4 text-red-500" />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Total Kills</p>
+                                    <p className="text-lg font-semibold tabular-nums">
+                                        <AnimatedCounter value={server_totals.total_zombie_kills} />
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card px-4 py-3">
+                                <div className="flex size-8 items-center justify-center rounded bg-green-500/10">
+                                    <Clock className="size-4 text-green-500" />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Total Hours</p>
+                                    <p className="text-lg font-semibold tabular-nums">
+                                        <AnimatedCounter value={server_totals.total_hours_survived} decimals={1} suffix="h" />
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card px-4 py-3">
+                                <div className="flex size-8 items-center justify-center rounded bg-orange-500/10">
+                                    <Skull className="size-4 text-orange-500" />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Total Deaths</p>
+                                    <p className="text-lg font-semibold tabular-nums">
+                                        <AnimatedCounter value={server_totals.total_deaths} />
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card px-4 py-3">
+                                <div className="flex size-8 items-center justify-center rounded bg-purple-500/10">
+                                    <Swords className="size-4 text-purple-500" />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-muted-foreground">PvP Hits</p>
+                                    <p className="text-lg font-semibold tabular-nums">
+                                        <AnimatedCounter value={server_totals.total_pvp_hits} />
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </Deferred>
+
                 <div className="grid gap-6 lg:grid-cols-2">
                     {/* Online Players */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Users className="size-5" />
-                                Online Players
-                            </CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <Users className="size-5" />
+                                    Online Players
+                                </CardTitle>
+                                <Link
+                                    href="/rankings"
+                                    className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                                >
+                                    View Rankings
+                                </Link>
+                            </div>
                             <CardDescription>
                                 {server.player_count} connected
                             </CardDescription>
@@ -401,13 +472,35 @@ export default function Dashboard({
                             {server.players.length > 0 ? (
                                 <div className="space-y-2">
                                     {server.players.map((player) => (
-                                        <div
-                                            key={player}
-                                            className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2"
+                                        <Link
+                                            key={player.username}
+                                            href={`/rankings/${player.username}`}
+                                            className="flex items-center justify-between gap-2 rounded-md border border-border/50 px-3 py-2 transition-colors hover:bg-muted/50"
                                         >
-                                            <Circle className="size-2 fill-green-500 text-green-500" />
-                                            <span className="text-sm font-medium">{player}</span>
-                                        </div>
+                                            <div className="flex items-center gap-2">
+                                                <Circle className="size-2 fill-green-500 text-green-500" />
+                                                <span className="text-sm font-medium">{player.username}</span>
+                                                {player.profession && (
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        {player.profession}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                {player.zombie_kills != null && (
+                                                    <span className="flex items-center gap-1" title="Zombie Kills">
+                                                        <Skull className="size-3" />
+                                                        {player.zombie_kills.toLocaleString()}
+                                                    </span>
+                                                )}
+                                                {player.hours_survived != null && (
+                                                    <span className="flex items-center gap-1" title="Hours Survived">
+                                                        <Clock className="size-3" />
+                                                        {player.hours_survived.toLocaleString(undefined, { maximumFractionDigits: 1 })}h
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </Link>
                                     ))}
                                 </div>
                             ) : (
@@ -478,336 +571,78 @@ export default function Dashboard({
                     </Card>
                 </div>
 
-                {/* Leaderboard */}
-                <Deferred data="leaderboard" fallback={
+                {/* Leaderboard + Game Events side-by-side */}
+                <div className="grid gap-6 lg:grid-cols-2">
+                    <Deferred data="leaderboard" fallback={
+                        <Card>
+                            <CardHeader>
+                                <Skeleton className="h-6 w-32" />
+                                <Skeleton className="mt-1 h-4 w-40" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid gap-6 sm:grid-cols-2">
+                                    {Array.from({ length: 2 }).map((_, col) => (
+                                        <div key={col} className="space-y-2">
+                                            <Skeleton className="h-4 w-28" />
+                                            {Array.from({ length: 5 }).map((_, i) => (
+                                                <Skeleton key={i} className="h-6 w-full" />
+                                            ))}
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    }>
+                        <div>
+                            <Leaderboard data={leaderboard} />
+                            <Link
+                                href="/rankings"
+                                className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+                            >
+                                <Trophy className="size-3.5" />
+                                View Full Rankings
+                            </Link>
+                        </div>
+                    </Deferred>
+
                     <Card>
                         <CardHeader>
-                            <Skeleton className="h-6 w-32" />
-                            <Skeleton className="mt-1 h-4 w-40" />
+                            <CardTitle className="flex items-center gap-2">
+                                <Zap className="size-5" />
+                                Game Events
+                            </CardTitle>
+                            <CardDescription>Deaths, PvP, crafting, and connections</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid gap-6 sm:grid-cols-2">
-                                {Array.from({ length: 2 }).map((_, col) => (
-                                    <div key={col} className="space-y-2">
-                                        <Skeleton className="h-4 w-28" />
-                                        {Array.from({ length: 5 }).map((_, i) => (
-                                            <Skeleton key={i} className="h-6 w-full" />
-                                        ))}
-                                    </div>
-                                ))}
-                            </div>
+                            <Deferred data="game_events" fallback={
+                                <div className="space-y-2">
+                                    {Array.from({ length: 5 }).map((_, i) => (
+                                        <div key={i} className="flex items-start gap-2.5">
+                                            <Skeleton className="mt-0.5 size-4 shrink-0 rounded" />
+                                            <div className="flex-1 space-y-1">
+                                                <Skeleton className="h-4 w-48" />
+                                                <Skeleton className="h-3 w-16" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            }>
+                                <ActivityFeed events={game_events ?? []} />
+                            </Deferred>
                         </CardContent>
                     </Card>
-                }>
-                    <Leaderboard data={leaderboard} />
-                </Deferred>
-
-                {/* Game Events */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Zap className="size-5" />
-                            Game Events
-                        </CardTitle>
-                        <CardDescription>Deaths, PvP, crafting, and connections</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Deferred data="game_events" fallback={
-                            <div className="space-y-2">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                    <div key={i} className="flex items-start gap-2.5">
-                                        <Skeleton className="mt-0.5 size-4 shrink-0 rounded" />
-                                        <div className="flex-1 space-y-1">
-                                            <Skeleton className="h-4 w-48" />
-                                            <Skeleton className="h-3 w-16" />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        }>
-                            <ActivityFeed events={game_events ?? []} />
-                        </Deferred>
-                    </CardContent>
-                </Card>
+                </div>
             </div>
 
-            <Dialog open={showRestartDialog} onOpenChange={setShowRestartDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Restart Server</DialogTitle>
-                        <DialogDescription>
-                            Choose a delay to warn players before restarting, or restart immediately.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="restart-countdown">Countdown</Label>
-                            <Select value={restartCountdown} onValueChange={setRestartCountdown}>
-                                <SelectTrigger id="restart-countdown">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {COUNTDOWN_OPTIONS.map((opt) => (
-                                        <SelectItem key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {restartCountdown !== '0' && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="restart-message">Warning message (optional)</Label>
-                                <Input
-                                    id="restart-message"
-                                    placeholder="Server restarting for maintenance..."
-                                    value={restartMessage}
-                                    onChange={(e) => setRestartMessage(e.target.value)}
-                                    maxLength={500}
-                                />
-                            </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowRestartDialog(false)}
-                            disabled={restartLoading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant={restartCountdown === '0' ? 'destructive' : 'default'}
-                            onClick={handleRestart}
-                            disabled={restartLoading}
-                        >
-                            {restartLoading
-                                ? 'Restarting...'
-                                : restartCountdown === '0'
-                                  ? 'Restart Now'
-                                  : 'Schedule Restart'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Stop Server</DialogTitle>
-                        <DialogDescription>
-                            Choose a delay to warn players before shutting down, or stop immediately.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="stop-countdown">Countdown</Label>
-                            <Select value={stopCountdown} onValueChange={setStopCountdown}>
-                                <SelectTrigger id="stop-countdown">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {COUNTDOWN_OPTIONS.map((opt) => (
-                                        <SelectItem key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {stopCountdown !== '0' && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="stop-message">Warning message (optional)</Label>
-                                <Input
-                                    id="stop-message"
-                                    placeholder="Server shutting down for maintenance..."
-                                    value={stopMessage}
-                                    onChange={(e) => setStopMessage(e.target.value)}
-                                    maxLength={500}
-                                />
-                            </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowStopDialog(false)}
-                            disabled={stopLoading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleStop}
-                            disabled={stopLoading}
-                        >
-                            {stopLoading
-                                ? 'Stopping...'
-                                : stopCountdown === '0'
-                                  ? 'Stop Now'
-                                  : 'Schedule Shutdown'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Update Game Server</DialogTitle>
-                        <DialogDescription>
-                            Force a SteamCMD re-download. Optionally change the Steam branch.
-                            A pre-update backup will be created automatically.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="rounded-md border border-border bg-muted/50 p-3 text-sm">
-                            {server.game_version
-                                ? `Current version: v${server.game_version} (${server.steam_branch ?? 'public'})`
-                                : `Current branch: ${server.steam_branch ?? 'public'}`}
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="update-branch">Steam Branch</Label>
-                            <Select value={updateBranch} onValueChange={setUpdateBranch}>
-                                <SelectTrigger id="update-branch">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="public">public</SelectItem>
-                                    <SelectItem value="unstable">unstable</SelectItem>
-                                    <SelectItem value="iwillbackupmysave">iwillbackupmysave</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="update-countdown">Countdown</Label>
-                            <Select value={updateCountdown} onValueChange={setUpdateCountdown}>
-                                <SelectTrigger id="update-countdown">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {COUNTDOWN_OPTIONS.map((opt) => (
-                                        <SelectItem key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {updateCountdown !== '0' && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="update-message">Warning message (optional)</Label>
-                                <Input
-                                    id="update-message"
-                                    placeholder="Server updating — expect downtime..."
-                                    value={updateMessage}
-                                    onChange={(e) => setUpdateMessage(e.target.value)}
-                                    maxLength={500}
-                                />
-                            </div>
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                            The server will be stopped, SteamCMD will re-download game files, then the server will restart.
-                            This may take several minutes depending on download speed.
-                        </p>
-                    </div>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowUpdateDialog(false)}
-                            disabled={updateLoading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleUpdate}
-                            disabled={updateLoading}
-                        >
-                            {updateLoading
-                                ? 'Updating...'
-                                : updateCountdown === '0'
-                                  ? 'Update Now'
-                                  : 'Schedule Update'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={showWipeDialog} onOpenChange={(open) => {
-                setShowWipeDialog(open);
-                if (!open) {
-                    setWipeConfirmStep(0);
-                }
-            }}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle className="text-destructive">Wipe Server</DialogTitle>
-                        <DialogDescription>
-                            This will permanently delete all save data. A backup will be created automatically before wiping.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-                            All player progress, buildings, and world state will be permanently destroyed.
-                            This action cannot be undone.
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="wipe-countdown">Countdown</Label>
-                            <Select value={wipeCountdown} onValueChange={setWipeCountdown}>
-                                <SelectTrigger id="wipe-countdown">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {COUNTDOWN_OPTIONS.map((opt) => (
-                                        <SelectItem key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {wipeCountdown !== '0' && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="wipe-message">Warning message (optional)</Label>
-                                <Input
-                                    id="wipe-message"
-                                    placeholder="Server wiping — all progress will be reset..."
-                                    value={wipeMessage}
-                                    onChange={(e) => setWipeMessage(e.target.value)}
-                                    maxLength={500}
-                                />
-                            </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setShowWipeDialog(false);
-                                setWipeConfirmStep(0);
-                            }}
-                            disabled={wipeLoading}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleWipe}
-                            disabled={wipeLoading}
-                        >
-                            {wipeLoading
-                                ? 'Wiping...'
-                                : wipeConfirmStep === 0
-                                  ? 'Confirm Wipe'
-                                  : wipeConfirmStep === 1
-                                    ? 'Are you sure? Click again'
-                                    : wipeCountdown === '0'
-                                      ? 'Wipe Now'
-                                      : 'Schedule Wipe'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <RestartDialog open={showRestartDialog} onOpenChange={setShowRestartDialog} />
+            <StopDialog open={showStopDialog} onOpenChange={setShowStopDialog} />
+            <UpdateDialog
+                open={showUpdateDialog}
+                onOpenChange={setShowUpdateDialog}
+                currentBranch={server.steam_branch ?? 'public'}
+                currentVersion={server.game_version}
+            />
+            <WipeDialog open={showWipeDialog} onOpenChange={setShowWipeDialog} />
         </AppLayout>
     );
 }

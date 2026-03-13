@@ -14,7 +14,7 @@ class GameEventFactory extends Factory
     public function definition(): array
     {
         return [
-            'event_type' => fake()->randomElement(['death', 'pvp_kill', 'connect', 'disconnect']),
+            'event_type' => fake()->randomElement(['death', 'pvp_hit', 'connect', 'disconnect']),
             'player' => fake()->userName(),
             'target' => null,
             'details' => null,
@@ -27,7 +27,7 @@ class GameEventFactory extends Factory
     public function pvpKill(): static
     {
         return $this->state([
-            'event_type' => 'pvp_kill',
+            'event_type' => 'pvp_hit',
             'target' => fake()->userName(),
             'details' => [
                 'weapon' => fake()->randomElement(['Base.Axe', 'Base.Shotgun', 'Base.BaseballBat']),

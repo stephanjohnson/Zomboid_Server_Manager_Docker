@@ -38,14 +38,14 @@ type Props = {
 };
 
 const EVENT_TYPES = [
-    { value: 'pvp_kill', label: 'PvP Kill', color: '#ef4444' },
+    { value: 'pvp_hit', label: 'PvP Hit', color: '#ef4444' },
     { value: 'death', label: 'Death', color: '#9ca3af' },
     { value: 'connect', label: 'Connect', color: '#22c55e' },
     { value: 'disconnect', label: 'Disconnect', color: '#f59e0b' },
 ] as const;
 
 const typeBadgeVariant: Record<string, 'destructive' | 'secondary' | 'outline'> = {
-    pvp_kill: 'destructive',
+    pvp_hit: 'destructive',
     death: 'secondary',
     connect: 'outline',
     disconnect: 'outline',
@@ -88,8 +88,8 @@ export default function Moderation({ mapConfig, hasTiles, filters, events }: Pro
     }
 
     function clearFilters() {
-        setLocalFilters({ event_types: 'pvp_kill,death', player: '', from: '', to: '' });
-        router.get('/admin/moderation', { event_types: 'pvp_kill,death' }, { preserveState: true });
+        setLocalFilters({ event_types: 'pvp_hit,death', player: '', from: '', to: '' });
+        router.get('/admin/moderation', { event_types: 'pvp_hit,death' }, { preserveState: true });
     }
 
     function panToEvent(event: GameEventEntry) {
