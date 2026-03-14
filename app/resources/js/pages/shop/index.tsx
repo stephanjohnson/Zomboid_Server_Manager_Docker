@@ -1,6 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { ArrowDownToLine, CheckCircle, Coins, Copy, Loader2, Package, Search, ShoppingBag, Star, Tag, XCircle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowDownToLine, CheckCircle, Clock, Coins, Copy, Loader2, Package, Search, ShoppingBag, Star, Tag, X, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,7 +85,7 @@ function PromoRibbon({ promotions }: { promotions: ActivePromotion[] }) {
     );
 }
 
-export default function ShopIndex({ categories, items, bundles, balance, activePromotions, hasPzAccount, pendingDeposit, lastDepositResult }: Props) {
+export default function ShopIndex({ categories, items, bundles, balance, activePromotions, hasPzAccount, pendingDeposit: initialPendingDeposit, lastDepositResult: initialLastDepositResult }: Props) {
     const { auth } = usePage().props;
     const isAuthenticated = !!auth.user;
     const [filter, setFilter] = useState('');
@@ -95,6 +96,61 @@ export default function ShopIndex({ categories, items, bundles, balance, activeP
     const [promoCode, setPromoCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [depositLoading, setDepositLoading] = useState(false);
+    const [pendingDeposit, setPendingDeposit] = useState(initialPendingDeposit);
+    const [lastDepositResult, setLastDepositResult] = useState(initialLastDepositResult);
+    const [depositCooldown, setDepositCooldown] = useState(0);
+    const [depositError, setDepositError] = useState<string | null>(null);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Sync from server props when page re-renders via Inertia
+    useEffect(() => {
+        setPendingDeposit(initialPendingDeposit);
+        setLastDepositResult(initialLastDepositResult);
+    }, [initialPendingDeposit, initialLastDepositResult]);
+
+    // Auto-dismiss deposit result after 8 seconds
+    useEffect(() => {
+        if (!lastDepositResult) return;
+        const timer = setTimeout(() => setLastDepositResult(null), 8000);
+        return () => clearTimeout(timer);
+    }, [lastDepositResult]);
+
+    // Auto-dismiss deposit error after 8 seconds (unless rate limited — cooldown handles that)
+    useEffect(() => {
+        if (!depositError || depositCooldown > 0) return;
+        const timer = setTimeout(() => setDepositError(null), 8000);
+        return () => clearTimeout(timer);
+    }, [depositError, depositCooldown]);
+
+    const pollDepositStatus = useCallback(async () => {
+        try {
+            const res = await fetch('/shop/deposit/status', {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            setPendingDeposit(data.pendingDeposit);
+            setLastDepositResult(data.lastDepositResult);
+        } catch {
+            // Silently ignore polling errors
+        }
+    }, []);
+
+    // Poll every 5 seconds while a deposit is pending
+    useEffect(() => {
+        if (pendingDeposit) {
+            pollRef.current = setInterval(pollDepositStatus, 5000);
+            return () => {
+                if (pollRef.current) clearInterval(pollRef.current);
+            };
+        }
+        if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+    }, [pendingDeposit, pollDepositStatus]);
 
     const filteredItems = useMemo(() => {
         let result = items;
@@ -149,20 +205,59 @@ export default function ShopIndex({ categories, items, bundles, balance, activeP
         }
     }
 
+    function startCooldown(seconds: number) {
+        if (cooldownRef.current) clearInterval(cooldownRef.current);
+        setDepositCooldown(seconds);
+        cooldownRef.current = setInterval(() => {
+            setDepositCooldown((prev) => {
+                if (prev <= 1) {
+                    if (cooldownRef.current) clearInterval(cooldownRef.current);
+                    cooldownRef.current = null;
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    }
+
+    // Clean up cooldown interval on unmount
+    useEffect(() => {
+        return () => {
+            if (cooldownRef.current) clearInterval(cooldownRef.current);
+        };
+    }, []);
+
     async function handleDeposit() {
         setDepositLoading(true);
-        const result = await fetchAction('/shop/deposit', {
-            successMessage: 'Deposit request sent! Stay online in-game.',
-        });
-        setDepositLoading(false);
-        if (result) {
-            router.reload();
+        setDepositError(null);
+        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+        try {
+            const res = await fetch('/shop/deposit', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+            });
+            const json = await res.json().catch(() => ({}));
+
+            if (res.ok) {
+                toast.success('Deposit request sent! Stay online in-game.');
+                setPendingDeposit(true);
+                setLastDepositResult(null);
+            } else if (res.status === 429) {
+                const retryAfter = parseInt(res.headers.get('Retry-After') || '60', 10);
+                startCooldown(retryAfter);
+                setDepositError('Too many deposit requests. Please wait before trying again.');
+            } else {
+                setDepositError(json.error || json.message || `Request failed (${res.status})`);
+            }
+        } catch {
+            setDepositError('Network error — could not reach the server');
         }
+        setDepositLoading(false);
     }
 
     function handleItemClick(clickedItem: ShopItem) {
         if (!isAuthenticated) {
-            router.visit('/login');
+            router.visit('/login?redirect=/shop');
             return;
         }
         setBuyItem(clickedItem);
@@ -171,7 +266,7 @@ export default function ShopIndex({ categories, items, bundles, balance, activeP
 
     function handleBundleClick(clickedBundle: ShopBundle) {
         if (!isAuthenticated) {
-            router.visit('/login');
+            router.visit('/login?redirect=/shop');
             return;
         }
         setBuyBundle(clickedBundle);
@@ -241,7 +336,7 @@ export default function ShopIndex({ categories, items, bundles, balance, activeP
                                         <p className="text-muted-foreground text-center text-sm">
                                             Log in to deposit money
                                         </p>
-                                        <Button size="sm" onClick={() => router.visit('/login')}>
+                                        <Button size="sm" onClick={() => router.visit('/login?redirect=/shop')}>
                                             Log In
                                         </Button>
                                     </>
@@ -258,14 +353,32 @@ export default function ShopIndex({ categories, items, bundles, balance, activeP
                                         </p>
                                     </>
                                 ) : (
-                                    <Button onClick={handleDeposit} disabled={depositLoading}>
+                                    <Button onClick={handleDeposit} disabled={depositLoading || depositCooldown > 0}>
                                         {depositLoading ? (
                                             <Loader2 className="mr-1.5 size-4 animate-spin" />
+                                        ) : depositCooldown > 0 ? (
+                                            <Clock className="mr-1.5 size-4" />
                                         ) : (
                                             <ArrowDownToLine className="mr-1.5 size-4" />
                                         )}
-                                        Deposit Money
+                                        {depositCooldown > 0 ? `Wait ${depositCooldown}s` : 'Deposit Money'}
                                     </Button>
+                                )}
+
+                                {/* Deposit error */}
+                                {depositError && !pendingDeposit && (
+                                    <div className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-1.5 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                                        <XCircle className="size-3.5 shrink-0" />
+                                        <span className="flex-1">{depositError}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setDepositError(null)}
+                                            className="shrink-0 rounded p-0.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                                            aria-label="Dismiss"
+                                        >
+                                            <X className="size-3.5" />
+                                        </button>
+                                    </div>
                                 )}
 
                                 {/* Last result */}
@@ -276,15 +389,23 @@ export default function ShopIndex({ categories, items, bundles, balance, activeP
                                             : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
                                     }`}>
                                         {lastDepositResult.status === 'success' ? (
-                                            <CheckCircle className="size-3.5" />
+                                            <CheckCircle className="size-3.5 shrink-0" />
                                         ) : (
-                                            <XCircle className="size-3.5" />
+                                            <XCircle className="size-3.5 shrink-0" />
                                         )}
-                                        <span>
+                                        <span className="flex-1">
                                             {lastDepositResult.status === 'success'
                                                 ? `Deposited ${lastDepositResult.total_coins} coins (${lastDepositResult.money_count} Money + ${lastDepositResult.stack_count} MoneyStack)`
                                                 : lastDepositResult.message || 'Deposit failed'}
                                         </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setLastDepositResult(null)}
+                                            className="shrink-0 rounded p-0.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                                            aria-label="Dismiss"
+                                        >
+                                            <X className="size-3.5" />
+                                        </button>
                                     </div>
                                 )}
                             </div>

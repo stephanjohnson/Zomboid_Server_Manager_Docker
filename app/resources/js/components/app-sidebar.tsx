@@ -3,7 +3,6 @@ import {
     Activity,
     Archive,
     Bell,
-    BookOpen,
     Coins,
     Crosshair,
     Timer,
@@ -16,6 +15,7 @@ import {
     ShieldAlert,
     ShoppingBag,
     Store,
+    Tag,
     Terminal,
     Trophy,
     User,
@@ -35,118 +35,53 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import type { Auth, NavItem } from '@/types';
+import type { Auth, NavGroup, NavItem } from '@/types';
 import AppLogo from './app-logo';
 import { dashboard } from '@/routes';
 
-const adminNavItems: NavItem[] = [
+const adminNavGroups: NavGroup[] = [
     {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
+        label: 'Server',
+        items: [
+            { title: 'Dashboard', href: dashboard(), icon: LayoutGrid },
+            { title: 'Players', href: '/admin/players', icon: Users },
+            { title: 'Player Map', href: '/admin/players/map', icon: MapPin },
+            { title: 'Config', href: '/admin/config', icon: Wrench },
+            { title: 'Mods', href: '/admin/mods', icon: Package },
+            { title: 'Backups', href: '/admin/backups', icon: Archive },
+            { title: 'Auto Restart', href: '/admin/auto-restart', icon: Timer },
+            { title: 'RCON Console', href: '/admin/rcon', icon: Terminal },
+            { title: 'Server Logs', href: '/admin/logs', icon: Activity },
+        ],
     },
     {
-        title: 'Players',
-        href: '/admin/players',
-        icon: Users,
+        label: 'Security',
+        items: [
+            { title: 'Whitelist', href: '/admin/whitelist', icon: Shield },
+            { title: 'Moderation', href: '/admin/moderation', icon: Crosshair },
+            { title: 'Safe Zones', href: '/admin/safe-zones', icon: ShieldAlert },
+        ],
     },
     {
-        title: 'Player Map',
-        href: '/admin/players/map',
-        icon: MapPin,
-    },
-    {
-        title: 'Config',
-        href: '/admin/config',
-        icon: Wrench,
-    },
-    {
-        title: 'Mods',
-        href: '/admin/mods',
-        icon: Package,
-    },
-    {
-        title: 'Backups',
-        href: '/admin/backups',
-        icon: Archive,
-    },
-    {
-        title: 'Whitelist',
-        href: '/admin/whitelist',
-        icon: Shield,
-    },
-    {
-        title: 'Audit Log',
-        href: '/admin/audit',
-        icon: ScrollText,
-    },
-    {
-        title: 'Discord',
-        href: '/admin/discord',
-        icon: Bell,
-    },
-    {
-        title: 'Auto Restart',
-        href: '/admin/auto-restart',
-        icon: Timer,
-    },
-    {
-        title: 'RCON Console',
-        href: '/admin/rcon',
-        icon: Terminal,
-    },
-    {
-        title: 'Moderation',
-        href: '/admin/moderation',
-        icon: Crosshair,
-    },
-    {
-        title: 'Safe Zones',
-        href: '/admin/safe-zones',
-        icon: ShieldAlert,
-    },
-    {
-        title: 'Server Logs',
-        href: '/admin/logs',
-        icon: Activity,
-    },
-    {
-        title: 'Shop',
-        href: '/admin/shop',
-        icon: Store,
-    },
-    {
-        title: 'Wallets',
-        href: '/admin/wallets',
-        icon: Wallet,
-    },
-    {
-        title: 'Rankings',
-        href: '/rankings',
-        icon: Trophy,
+        label: 'Shop',
+        items: [
+            { title: 'Items & Categories', href: '/admin/shop', icon: Store },
+            { title: 'Bundles', href: '/admin/shop/bundles', icon: Package },
+            { title: 'Promotions', href: '/admin/shop/promotions', icon: Tag },
+            { title: 'Wallets', href: '/admin/wallets', icon: Wallet },
+        ],
     },
 ];
 
-const playerNavItems: NavItem[] = [
+const playerNavGroups: NavGroup[] = [
     {
-        title: 'Player Portal',
-        href: '/portal',
-        icon: Gamepad2,
-    },
-    {
-        title: 'Shop',
-        href: '/shop',
-        icon: ShoppingBag,
-    },
-    {
-        title: 'My Wallet',
-        href: '/shop/my/wallet',
-        icon: Coins,
-    },
-    {
-        title: 'Rankings',
-        href: '/rankings',
-        icon: Trophy,
+        label: 'Menu',
+        items: [
+            { title: 'Player Portal', href: '/portal', icon: Gamepad2 },
+            { title: 'Shop', href: '/shop', icon: ShoppingBag },
+            { title: 'My Wallet', href: '/shop/my/wallet', icon: Coins },
+            { title: 'Rankings', href: '/rankings', icon: Trophy },
+        ],
     },
 ];
 
@@ -170,9 +105,22 @@ export function AppSidebar() {
         icon: User,
     };
 
-    const navItems = isAdmin
-        ? [...adminNavItems, myStatsItem]
-        : [...playerNavItems, myStatsItem];
+    const communityGroup: NavGroup = {
+        label: 'Community',
+        items: [
+            { title: 'Discord', href: '/admin/discord', icon: Bell },
+            { title: 'Audit Log', href: '/admin/audit', icon: ScrollText },
+            { title: 'Rankings', href: '/rankings', icon: Trophy },
+            myStatsItem,
+        ],
+    };
+
+    const navGroups = isAdmin
+        ? [...adminNavGroups, communityGroup]
+        : playerNavGroups.map((group) => ({
+              ...group,
+              items: [...group.items, myStatsItem],
+          }));
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -189,7 +137,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={navItems} />
+                <NavMain groups={navGroups} />
             </SidebarContent>
 
             <SidebarFooter>

@@ -9,6 +9,9 @@ use Illuminate\Support\Str;
 
 class MoneyDepositManager
 {
+    /** Seconds before a pending request with no result is considered timed out. */
+    private const PENDING_TIMEOUT_SECONDS = 120;
+
     private string $requestsPath;
 
     private string $resultsPath;
@@ -45,15 +48,41 @@ class MoneyDepositManager
 
     /**
      * Check if a player has a pending (unprocessed) deposit request.
+     * Cross-references the results file and applies a timeout — if a result exists
+     * for a request ID or the request is older than PENDING_TIMEOUT_SECONDS, it's no longer pending.
      */
     public function hasPendingRequest(string $username): bool
     {
-        $data = $this->readJsonFile($this->requestsPath, ['version' => 1, 'updated_at' => '', 'requests' => []]);
+        $requests = $this->readJsonFile($this->requestsPath, ['version' => 1, 'updated_at' => '', 'requests' => []]);
+        $results = $this->readJsonFile($this->resultsPath, ['version' => 1, 'updated_at' => '', 'results' => []]);
 
-        foreach ($data['requests'] as $request) {
-            if ($request['username'] === $username && $request['status'] === 'pending') {
-                return true;
+        // Build set of processed request IDs from results
+        $processedIds = [];
+        foreach ($results['results'] as $result) {
+            if (isset($result['id'])) {
+                $processedIds[$result['id']] = true;
             }
+        }
+
+        $timeoutCutoff = time() - self::PENDING_TIMEOUT_SECONDS;
+
+        foreach ($requests['requests'] as $request) {
+            if ($request['username'] !== $username || $request['status'] !== 'pending') {
+                continue;
+            }
+
+            // Already has a result from Lua
+            if (isset($processedIds[$request['id']])) {
+                continue;
+            }
+
+            // Timed out — Lua never responded (server probably offline)
+            $createdAt = strtotime($request['created_at'] ?? '');
+            if ($createdAt && $createdAt < $timeoutCutoff) {
+                continue;
+            }
+
+            return true;
         }
 
         return false;
@@ -61,48 +90,91 @@ class MoneyDepositManager
 
     /**
      * Get the most recent deposit result for a user.
+     * If a request has timed out without a Lua result, synthesizes a timeout error.
      *
      * @return array{id: string, username: string, status: string, money_count: int, stack_count: int, total_coins: int, message: string|null, processed_at: string}|null
      */
     public function getLastResult(string $username): ?array
     {
-        $data = $this->readJsonFile($this->resultsPath, ['version' => 1, 'updated_at' => '', 'results' => []]);
+        $resultsData = $this->readJsonFile($this->resultsPath, ['version' => 1, 'updated_at' => '', 'results' => []]);
 
+        // Check for a real Lua result first
         $last = null;
-        foreach ($data['results'] as $result) {
+        foreach ($resultsData['results'] as $result) {
             if ($result['username'] === $username) {
                 $last = $result;
             }
         }
 
-        return $last;
+        if ($last !== null) {
+            return $last;
+        }
+
+        // No Lua result — check for a timed-out request and synthesize an error
+        $requestsData = $this->readJsonFile($this->requestsPath, ['version' => 1, 'updated_at' => '', 'requests' => []]);
+        $timeoutCutoff = time() - self::PENDING_TIMEOUT_SECONDS;
+
+        $staleAge = time() - 600; // 10 minutes — same as cleanup window
+
+        $timedOutRequest = null;
+        foreach ($requestsData['requests'] as $request) {
+            if ($request['username'] !== $username || $request['status'] !== 'pending') {
+                continue;
+            }
+
+            $createdAt = strtotime($request['created_at'] ?? '');
+            if ($createdAt && $createdAt < $timeoutCutoff && $createdAt > $staleAge) {
+                $timedOutRequest = $request;
+            }
+        }
+
+        if ($timedOutRequest !== null) {
+            return [
+                'id' => $timedOutRequest['id'],
+                'username' => $username,
+                'status' => 'failed',
+                'money_count' => 0,
+                'stack_count' => 0,
+                'total_coins' => 0,
+                'message' => 'Deposit timed out. Make sure you are online in-game and the server is running.',
+                'processed_at' => date('c'),
+            ];
+        }
+
+        return null;
     }
 
     /**
-     * Process deposit results: credit wallets and return count processed.
+     * Process deposit results: credit wallets and return IDs of successfully credited results.
+     *
+     * @return array<string> IDs of results that were credited
      */
-    public function processResults(WalletService $walletService): int
+    public function processResults(WalletService $walletService): array
     {
         $data = $this->readJsonFile($this->resultsPath, ['version' => 1, 'updated_at' => '', 'results' => []]);
 
         if (empty($data['results'])) {
-            return 0;
+            return [];
         }
 
-        $processed = 0;
+        $creditedIds = [];
 
         foreach ($data['results'] as $result) {
             if (($result['status'] ?? '') !== 'success') {
                 continue;
             }
 
-            // Dedup: skip if already credited
+            // Dedup: skip if already credited (but still mark for removal)
             if (WalletTransaction::query()->where('reference_id', $result['id'])->exists()) {
+                $creditedIds[] = $result['id'];
+
                 continue;
             }
 
             $totalCoins = $result['total_coins'] ?? 0;
             if ($totalCoins <= 0) {
+                $creditedIds[] = $result['id'];
+
                 continue;
             }
 
@@ -132,22 +204,39 @@ class MoneyDepositManager
                 ],
             );
 
-            $processed++;
+            $creditedIds[] = $result['id'];
         }
 
-        return $processed;
+        return $creditedIds;
     }
 
     /**
-     * Remove stale pending requests older than 10 minutes.
+     * Remove stale pending requests older than 10 minutes, and requests that already have a result.
      */
     public function cleanupStaleRequests(): void
     {
         $data = $this->readJsonFile($this->requestsPath, ['version' => 1, 'updated_at' => '', 'requests' => []]);
+        $results = $this->readJsonFile($this->resultsPath, ['version' => 1, 'updated_at' => '', 'results' => []]);
         $cutoff = strtotime('-10 minutes');
         $changed = false;
 
-        $data['requests'] = array_values(array_filter($data['requests'], function ($request) use ($cutoff, &$changed) {
+        // Build set of processed request IDs from results
+        $processedIds = [];
+        foreach ($results['results'] as $result) {
+            if (isset($result['id'])) {
+                $processedIds[$result['id']] = true;
+            }
+        }
+
+        $data['requests'] = array_values(array_filter($data['requests'], function ($request) use ($cutoff, $processedIds, &$changed) {
+            // Remove requests that already have a result
+            if (isset($processedIds[$request['id']])) {
+                $changed = true;
+
+                return false;
+            }
+
+            // Remove stale pending requests older than 10 minutes
             $createdAt = strtotime($request['created_at'] ?? '');
             if ($request['status'] === 'pending' && $createdAt && $createdAt < $cutoff) {
                 $changed = true;
@@ -165,15 +254,27 @@ class MoneyDepositManager
     }
 
     /**
-     * Clear processed results from the results file.
+     * Remove only successfully credited results from the results file.
+     * Failed results are kept so the UI can display them.
+     *
+     * @param  array<string>  $creditedIds  Result IDs that were successfully credited to wallets
      */
-    public function cleanupResults(): bool
+    public function removeProcessedResults(array $creditedIds): bool
     {
-        return $this->writeJsonFileAtomic($this->resultsPath, [
-            'version' => 1,
-            'updated_at' => date('c'),
-            'results' => [],
-        ]);
+        if (empty($creditedIds)) {
+            return true;
+        }
+
+        $data = $this->readJsonFile($this->resultsPath, ['version' => 1, 'updated_at' => '', 'results' => []]);
+        $idSet = array_flip($creditedIds);
+
+        $data['results'] = array_values(array_filter(
+            $data['results'],
+            fn ($result) => ! isset($idSet[$result['id']]),
+        ));
+        $data['updated_at'] = date('c');
+
+        return $this->writeJsonFileAtomic($this->resultsPath, $data);
     }
 
     /**

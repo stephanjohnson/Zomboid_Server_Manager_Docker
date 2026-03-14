@@ -11,6 +11,7 @@ use App\Models\ShopPromotion;
 use App\Models\WhitelistEntry;
 use App\Services\ItemIconResolver;
 use App\Services\MoneyDepositManager;
+use App\Services\OnlinePlayersReader;
 use App\Services\PromotionEngine;
 use App\Services\ShopPurchaseService;
 use App\Services\WalletService;
@@ -27,6 +28,7 @@ class ShopController extends Controller
         private readonly PromotionEngine $promotionEngine,
         private readonly ItemIconResolver $iconResolver,
         private readonly MoneyDepositManager $depositManager,
+        private readonly OnlinePlayersReader $onlinePlayersReader,
     ) {}
 
     /**
@@ -274,11 +276,42 @@ class ShopController extends Controller
             return response()->json(['error' => 'A deposit request is already pending'], 422);
         }
 
+        // Check if the player is currently online in-game before creating the request
+        $onlinePlayers = $this->onlinePlayersReader->getOnlineUsernames();
+        if (! in_array($whitelistEntry->pz_username, $onlinePlayers, true)) {
+            return response()->json(['error' => 'You must be online in-game to deposit money. Log in to the server and try again.'], 422);
+        }
+
         $entry = $this->depositManager->createRequest($whitelistEntry->pz_username);
 
         return response()->json([
             'message' => 'Deposit request created. Make sure you are online in-game — your money will be collected within ~15 seconds.',
             'request_id' => $entry['id'],
+        ]);
+    }
+
+    /**
+     * Poll endpoint for deposit status (used by frontend polling).
+     */
+    public function depositStatus(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $whitelistEntry = WhitelistEntry::query()
+            ->where('user_id', $user->id)
+            ->where('active', true)
+            ->first();
+
+        if (! $whitelistEntry) {
+            return response()->json([
+                'pendingDeposit' => false,
+                'lastDepositResult' => null,
+            ]);
+        }
+
+        return response()->json([
+            'pendingDeposit' => $this->depositManager->hasPendingRequest($whitelistEntry->pz_username),
+            'lastDepositResult' => $this->depositManager->getLastResult($whitelistEntry->pz_username),
         ]);
     }
 

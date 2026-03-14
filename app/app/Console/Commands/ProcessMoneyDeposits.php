@@ -14,17 +14,17 @@ class ProcessMoneyDeposits extends Command
 
     public function handle(MoneyDepositManager $depositManager, WalletService $walletService): int
     {
-        // Clean up stale requests first
+        // Clean up stale requests and requests that already have results
         $depositManager->cleanupStaleRequests();
 
-        // Process results and credit wallets
-        $count = $depositManager->processResults($walletService);
+        // Process results and credit wallets, collecting IDs of credited results
+        $creditedIds = $depositManager->processResults($walletService);
 
-        if ($count > 0) {
-            $this->info("Credited {$count} money deposit(s) to wallets.");
+        if (count($creditedIds) > 0) {
+            $this->info('Credited '.count($creditedIds).' money deposit(s) to wallets.');
 
-            // Clear processed results
-            $depositManager->cleanupResults();
+            // Remove only the successfully credited results; failed results stay visible
+            $depositManager->removeProcessedResults($creditedIds);
         }
 
         return self::SUCCESS;
