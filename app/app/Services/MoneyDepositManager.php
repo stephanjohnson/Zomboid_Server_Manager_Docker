@@ -98,10 +98,15 @@ class MoneyDepositManager
     {
         $resultsData = $this->readJsonFile($this->resultsPath, ['version' => 1, 'updated_at' => '', 'results' => []]);
 
-        // Check for a real Lua result first
+        // Check for a real Lua result first (only show recent results — within 60 seconds)
+        $recentCutoff = time() - 60;
         $last = null;
         foreach ($resultsData['results'] as $result) {
-            if ($result['username'] === $username) {
+            if ($result['username'] !== $username) {
+                continue;
+            }
+            $processedAt = strtotime($result['processed_at'] ?? '');
+            if ($processedAt && $processedAt > $recentCutoff) {
                 $last = $result;
             }
         }
@@ -194,12 +199,12 @@ class MoneyDepositManager
                 $wallet,
                 (float) $totalCoins,
                 TransactionSource::InGameDeposit,
-                "In-game money deposit: {$result['money_count']}x Money + {$result['stack_count']}x MoneyStack",
+                "In-game money deposit: {$result['money_count']}x Money + " . ($result['bundle_count'] ?? 0) . "x MoneyBundle",
                 'deposit',
                 $result['id'],
                 [
                     'money_count' => $result['money_count'] ?? 0,
-                    'stack_count' => $result['stack_count'] ?? 0,
+                    'bundle_count' => $result['bundle_count'] ?? 0,
                     'pz_username' => $result['username'],
                 ],
             );

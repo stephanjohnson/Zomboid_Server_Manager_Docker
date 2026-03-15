@@ -8,12 +8,14 @@ use App\Models\ShopBundle;
 use App\Models\ShopCategory;
 use App\Models\ShopItem;
 use App\Models\ShopPromotion;
+use App\Models\ShopPurchase;
 use App\Models\WhitelistEntry;
 use App\Services\InventoryReader;
 use App\Services\ItemIconResolver;
 use App\Services\MoneyDepositManager;
 use App\Services\OnlinePlayersReader;
 use App\Services\PromotionEngine;
+use App\Services\ShopDeliveryService;
 use App\Services\ShopPurchaseService;
 use App\Services\WalletService;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +33,7 @@ class ShopController extends Controller
         private readonly MoneyDepositManager $depositManager,
         private readonly OnlinePlayersReader $onlinePlayersReader,
         private readonly InventoryReader $inventoryReader,
+        private readonly ShopDeliveryService $deliveryService,
     ) {}
 
     /**
@@ -76,6 +79,7 @@ class ShopController extends Controller
 
         $user = request()->user();
         $balance = $user ? $this->walletService->getBalance($user) : null;
+        $availableBalance = $user ? $this->walletService->getAvailableBalance($user) : null;
 
         $hasPzAccount = false;
         $pendingDeposit = false;
@@ -100,6 +104,7 @@ class ShopController extends Controller
             'items' => $items,
             'bundles' => $bundles,
             'balance' => $balance,
+            'availableBalance' => $availableBalance,
             'activePromotions' => $activePromotions,
             'hasPzAccount' => $hasPzAccount,
             'pendingDeposit' => $pendingDeposit,
@@ -191,9 +196,10 @@ class ShopController extends Controller
             );
 
             return response()->json([
-                'message' => "Purchased {$quantity}x {$item->name}",
+                'message' => "Delivering {$quantity}x {$item->name}...",
                 'purchase_id' => $purchase->id,
                 'balance' => $this->walletService->getBalance($request->user()),
+                'availableBalance' => $this->walletService->getAvailableBalance($request->user()),
             ]);
         } catch (InsufficientBalanceException $e) {
             return response()->json([
@@ -300,9 +306,10 @@ class ShopController extends Controller
             );
 
             return response()->json([
-                'message' => "Purchased bundle: {$bundle->name}",
+                'message' => "Delivering bundle: {$bundle->name}...",
                 'purchase_id' => $purchase->id,
                 'balance' => $this->walletService->getBalance($request->user()),
+                'availableBalance' => $this->walletService->getAvailableBalance($request->user()),
             ]);
         } catch (InsufficientBalanceException $e) {
             return response()->json([
@@ -396,6 +403,48 @@ class ShopController extends Controller
             'pendingDeposit' => $this->depositManager->hasPendingRequest($whitelistEntry->pz_username),
             'lastDepositResult' => $this->depositManager->getLastResult($whitelistEntry->pz_username),
             'balance' => $this->walletService->getBalance($user),
+        ]);
+    }
+
+    /**
+     * Poll endpoint for purchase delivery status.
+     * Processes delivery results inline for near-instant finalization.
+     */
+    public function purchaseStatus(Request $request, string $purchaseId): JsonResponse
+    {
+        $purchase = ShopPurchase::query()
+            ->where('id', $purchaseId)
+            ->where('user_id', $request->user()->id)
+            ->with('deliveries')
+            ->first();
+
+        if (! $purchase) {
+            return response()->json(['error' => 'Purchase not found'], 404);
+        }
+
+        // Process any available delivery results inline
+        $this->deliveryService->processResults();
+
+        // Refresh to get latest state
+        $purchase->refresh();
+        $purchase->load('deliveries');
+
+        $isComplete = in_array($purchase->delivery_status->value, ['delivered', 'failed', 'partially_delivered']);
+
+        return response()->json([
+            'purchase_id' => $purchase->id,
+            'delivery_status' => $purchase->delivery_status->value,
+            'is_complete' => $isComplete,
+            'is_debited' => $purchase->wallet_transaction_id !== null,
+            'total_price' => (float) $purchase->total_price,
+            'balance' => $this->walletService->getBalance($request->user()),
+            'availableBalance' => $this->walletService->getAvailableBalance($request->user()),
+            'deliveries' => $purchase->deliveries->map(fn ($d) => [
+                'item_type' => $d->item_type,
+                'quantity' => $d->quantity,
+                'status' => $d->status->value,
+                'error_message' => $d->error_message,
+            ]),
         ]);
     }
 

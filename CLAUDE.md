@@ -99,6 +99,13 @@ The Laravel app is the single control plane wrapping three integration points:
 - Mod management must keep `WorkshopItems=` and `Mods=` lines in sync (paired entries, semicolon-separated)
 - PZ whitelist lives in a SQLite file (`serverPZ.db`), not PostgreSQL — API reads/writes it directly via separate DB connection
 - Auth: API key in `X-API-Key` header for API endpoints. Fortify session auth for web dashboard. Sanctum for API tokens.
+- **Atomic shop operations (deliver-then-debit):**
+  - **Deposits:** Items removed from inventory → verified removed → wallet credited (items-first)
+  - **Purchases:** RCON gives items to online player → wallet debited on confirmation. Lua queue as fallback for offline players.
+  - RCON `additem` is the only reliable way to give items in PZ multiplayer (items appear and are fully usable). Lua `inventory:AddItem()` doesn't sync to clients.
+  - `wallet_transaction_id` on `shop_purchases` is nullable — starts NULL, set when debit completes
+  - `WalletService::getAvailableBalance()` subtracts pending purchase holds to prevent double-spending
+  - If debit fails after delivery (rare race), items are rolled back via `removeItem` queue
 
 ## Implementation Phases
 

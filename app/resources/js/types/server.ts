@@ -415,12 +415,28 @@ export type ShopDelivery = {
     created_at: string;
 };
 
+export type PurchaseStatusResponse = {
+    purchase_id: string;
+    delivery_status: 'pending' | 'queued' | 'delivered' | 'partially_delivered' | 'failed';
+    is_complete: boolean;
+    is_debited: boolean;
+    total_price: number;
+    balance: number;
+    availableBalance: number;
+    deliveries: {
+        item_type: string;
+        quantity: number;
+        status: 'pending' | 'queued' | 'delivered' | 'failed';
+        error_message: string | null;
+    }[];
+};
+
 export type DepositResult = {
     id: string;
     username: string;
     status: 'success' | 'failed';
     money_count: number;
-    stack_count: number;
+    bundle_count?: number;
     total_coins: number;
     message: string | null;
     processed_at: string;

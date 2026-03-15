@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Enums\DeliveryStatus;
-use App\Enums\TransactionSource;
 use App\Exceptions\InsufficientBalanceException;
 use App\Models\ShopBundle;
 use App\Models\ShopItem;
@@ -23,6 +22,9 @@ class ShopPurchaseService
 
     /**
      * Purchase a shop item.
+     *
+     * Creates the purchase record without debiting the wallet. The wallet is debited
+     * only after Lua confirms items were delivered (deliver-then-debit pattern).
      *
      * @throws InsufficientBalanceException
      * @throws InvalidArgumentException
@@ -60,19 +62,16 @@ class ShopPurchaseService
         $discount = $this->promotionEngine->calculateDiscount($item, $quantity, $promotion);
         $totalPrice = max(0, ((float) $item->price * $quantity) - $discount);
 
+        // Check available balance (actual balance minus pending purchase holds)
+        $availableBalance = $this->walletService->getAvailableBalance($user);
+        if ($availableBalance < $totalPrice) {
+            throw new InsufficientBalanceException($availableBalance, $totalPrice);
+        }
+
         $purchase = DB::transaction(function () use ($user, $item, $quantity, $promotion, $discount, $totalPrice) {
-            $wallet = $this->walletService->getOrCreateWallet($user);
-
-            $transaction = $this->walletService->debit(
-                $wallet,
-                $totalPrice,
-                TransactionSource::Purchase,
-                "Purchased {$quantity}x {$item->name}",
-            );
-
             $purchase = ShopPurchase::query()->create([
                 'user_id' => $user->id,
-                'wallet_transaction_id' => $transaction->id,
+                'wallet_transaction_id' => null,
                 'purchasable_type' => ShopItem::class,
                 'purchasable_id' => $item->id,
                 'quantity_bought' => $quantity,
@@ -117,6 +116,9 @@ class ShopPurchaseService
     /**
      * Purchase a shop bundle.
      *
+     * Creates the purchase record without debiting the wallet. The wallet is debited
+     * only after Lua confirms items were delivered (deliver-then-debit pattern).
+     *
      * @throws InsufficientBalanceException
      * @throws InvalidArgumentException
      */
@@ -154,16 +156,13 @@ class ShopPurchaseService
         $discount = $this->promotionEngine->calculateDiscount($bundle, 1, $promotion);
         $totalPrice = max(0, (float) $bundle->price - $discount);
 
+        // Check available balance (actual balance minus pending purchase holds)
+        $availableBalance = $this->walletService->getAvailableBalance($user);
+        if ($availableBalance < $totalPrice) {
+            throw new InsufficientBalanceException($availableBalance, $totalPrice);
+        }
+
         $purchase = DB::transaction(function () use ($user, $bundle, $promotion, $discount, $totalPrice) {
-            $wallet = $this->walletService->getOrCreateWallet($user);
-
-            $transaction = $this->walletService->debit(
-                $wallet,
-                $totalPrice,
-                TransactionSource::Purchase,
-                "Purchased bundle: {$bundle->name}",
-            );
-
             $itemSnapshot = $bundle->items->map(fn ($item) => [
                 'id' => $item->id,
                 'name' => $item->name,
@@ -173,7 +172,7 @@ class ShopPurchaseService
 
             $purchase = ShopPurchase::query()->create([
                 'user_id' => $user->id,
-                'wallet_transaction_id' => $transaction->id,
+                'wallet_transaction_id' => null,
                 'purchasable_type' => ShopBundle::class,
                 'purchasable_id' => $bundle->id,
                 'quantity_bought' => 1,

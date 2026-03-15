@@ -1,6 +1,7 @@
 <?php
 
 use App\Services\DeliveryQueueManager;
+use App\Services\InventoryReader;
 use App\Services\OnlinePlayersReader;
 use App\Services\RconClient;
 
@@ -16,10 +17,12 @@ beforeEach(function () {
     $rcon = Mockery::mock(RconClient::class);
     $onlinePlayers = Mockery::mock(OnlinePlayersReader::class);
     $onlinePlayers->shouldReceive('getOnlineUsernames')->andReturn([]);
+    $inventoryReader = Mockery::mock(InventoryReader::class);
 
     $this->manager = new DeliveryQueueManager(
         rcon: $rcon,
         onlinePlayers: $onlinePlayers,
+        inventoryReader: $inventoryReader,
         queuePath: $this->queuePath,
         resultsPath: $this->resultsPath,
     );
@@ -40,6 +43,17 @@ it('gives an item by adding to queue', function () {
         ->and($entry['username'])->toBe('TestPlayer')
         ->and($entry['item_type'])->toBe('Base.Axe')
         ->and($entry['count'])->toBe(2)
+        ->and($entry['status'])->toBe('pending')
+        ->and($entry['id'])->toMatch('/^[0-9a-f-]{36}$/');
+});
+
+it('gives a verified item by adding to queue', function () {
+    $entry = $this->manager->giveItemVerified('TestPlayer', 'Base.Axe', 3);
+
+    expect($entry['action'])->toBe('give_verified')
+        ->and($entry['username'])->toBe('TestPlayer')
+        ->and($entry['item_type'])->toBe('Base.Axe')
+        ->and($entry['count'])->toBe(3)
         ->and($entry['status'])->toBe('pending')
         ->and($entry['id'])->toMatch('/^[0-9a-f-]{36}$/');
 });

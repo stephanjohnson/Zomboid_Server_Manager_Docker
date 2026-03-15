@@ -42,7 +42,8 @@ local function onServerCommand(module, command, args)
         end
 
     elseif command == "addItem" then
-        -- Server already added the item — mirror the addition on the client.
+        -- Server already added the item — mirror the addition on the client
+        -- so the inventory UI updates instantly without relog.
         local itemType = args.item_type
         local count = tonumber(args.count) or 1
         print("[ZM_ClientCommands] addItem: type=" .. tostring(itemType) .. " count=" .. tostring(count))

@@ -1,5 +1,5 @@
 --
--- ZM_MoneyDeposit.lua — Reads deposit_requests.json, removes Base.Money/MoneyStack
+-- ZM_MoneyDeposit.lua — Reads deposit_requests.json, removes Base.Money/MoneyBundle
 -- from player inventories, writes deposit_results.json
 --
 
@@ -50,13 +50,13 @@ end
 --- Count money items in a container (without removing)
 local function countMoneyInContainer(container)
     local money = 0
-    local stacks = 0
+    local bundles = 0
     if not container then
-        return money, stacks
+        return money, bundles
     end
     local allItems = container:getItems()
     if not allItems then
-        return money, stacks
+        return money, bundles
     end
     for i = 0, allItems:size() - 1 do
         local item = allItems:get(i)
@@ -64,32 +64,32 @@ local function countMoneyInContainer(container)
             local fullType = item:getFullType()
             if fullType == "Base.Money" then
                 money = money + 1
-            elseif fullType == "Base.MoneyStack" then
-                stacks = stacks + 1
+            elseif fullType == "Base.MoneyBundle" then
+                bundles = bundles + 1
             end
         end
     end
-    return money, stacks
+    return money, bundles
 end
 
 --- Count total money items across all player containers
 local function countAllMoney(player)
     local totalMoney = 0
-    local totalStacks = 0
+    local totalBundles = 0
 
     local inventory = player:getInventory()
-    local m, s = countMoneyInContainer(inventory)
+    local m, b = countMoneyInContainer(inventory)
     totalMoney = totalMoney + m
-    totalStacks = totalStacks + s
+    totalBundles = totalBundles + b
 
     local backpack = player:getClothingItem_Back()
     if backpack and backpack:getItemContainer() then
-        m, s = countMoneyInContainer(backpack:getItemContainer())
+        m, b = countMoneyInContainer(backpack:getItemContainer())
         totalMoney = totalMoney + m
-        totalStacks = totalStacks + s
+        totalBundles = totalBundles + b
     end
 
-    return totalMoney, totalStacks
+    return totalMoney, totalBundles
 end
 
 --- Remove all items of a given type from a container using getFirstType loop.
@@ -122,24 +122,40 @@ local function removeAllOfType(container, fullType)
     return removed
 end
 
---- Remove all Money and MoneyStack items from a player.
---- Returns money_removed, stacks_removed
+--- Remove all Money and MoneyBundle items from a player.
+--- Returns money_removed, bundles_removed
 local function removeMoney(player)
     local moneyRemoved = 0
-    local stacksRemoved = 0
+    local bundlesRemoved = 0
 
     local inventory = player:getInventory()
     moneyRemoved = moneyRemoved + removeAllOfType(inventory, "Base.Money")
-    stacksRemoved = stacksRemoved + removeAllOfType(inventory, "Base.MoneyStack")
+    bundlesRemoved = bundlesRemoved + removeAllOfType(inventory, "Base.MoneyBundle")
 
     local backpack = player:getClothingItem_Back()
     if backpack and backpack:getItemContainer() then
         local bagContainer = backpack:getItemContainer()
         moneyRemoved = moneyRemoved + removeAllOfType(bagContainer, "Base.Money")
-        stacksRemoved = stacksRemoved + removeAllOfType(bagContainer, "Base.MoneyStack")
+        bundlesRemoved = bundlesRemoved + removeAllOfType(bagContainer, "Base.MoneyBundle")
     end
 
-    return moneyRemoved, stacksRemoved
+    -- Tell the client to remove the items for instant UI update
+    if isServer() then
+        if moneyRemoved > 0 then
+            sendServerCommand(player, "ZomboidManager", "removeItem", {
+                item_type = "Base.Money",
+                count = tostring(moneyRemoved),
+            })
+        end
+        if bundlesRemoved > 0 then
+            sendServerCommand(player, "ZomboidManager", "removeItem", {
+                item_type = "Base.MoneyBundle",
+                count = tostring(bundlesRemoved),
+            })
+        end
+    end
+
+    return moneyRemoved, bundlesRemoved
 end
 
 --- Process all pending deposit requests
@@ -190,34 +206,35 @@ function ZM_MoneyDeposit.process()
                 result.message = "player not online"
             else
                 -- Step 1: Count money BEFORE removal
-                local moneyBefore, stacksBefore = countAllMoney(player)
+                local moneyBefore, bundlesBefore = countAllMoney(player)
 
-                if moneyBefore == 0 and stacksBefore == 0 then
+                if moneyBefore == 0 and bundlesBefore == 0 then
                     result.message = "no money items found"
                 else
                     -- Step 2: Remove all money items
-                    local moneyRemoved, stacksRemoved = removeMoney(player)
+                    local moneyRemoved, bundlesRemoved = removeMoney(player)
 
                     -- Step 3: Verify removal — count money AFTER removal
-                    local moneyAfter, stacksAfter = countAllMoney(player)
+                    local moneyAfter, bundlesAfter = countAllMoney(player)
 
-                    if moneyAfter > 0 or stacksAfter > 0 then
+                    if moneyAfter > 0 or bundlesAfter > 0 then
                         -- Some items were NOT removed — report failure
                         -- Do NOT credit coins since items are still in inventory
-                        result.message = "removal failed: " .. moneyAfter .. " Money and " .. stacksAfter .. " MoneyStack still in inventory"
-                        print("[ZomboidManager] WARNING: Money deposit removal incomplete for " .. req.username .. " — " .. moneyAfter .. " Money + " .. stacksAfter .. " MoneyStack remaining")
+                        result.message = "removal failed: " .. moneyAfter .. " Money, " .. bundlesAfter .. " MoneyBundle still in inventory"
+                        print("[ZomboidManager] WARNING: Money deposit removal incomplete for " .. req.username .. " — " .. moneyAfter .. " Money + " .. bundlesAfter .. " MoneyBundle remaining")
                     else
                         -- All items successfully removed — report success
+                        -- Money = 1 coin, MoneyBundle = 100 coins (crafted from 100x Money)
                         local moneyValue = 1
-                        local stackValue = 10
-                        local totalCoins = (moneyRemoved * moneyValue) + (stacksRemoved * stackValue)
+                        local bundleValue = 100
+                        local totalCoins = (moneyRemoved * moneyValue) + (bundlesRemoved * bundleValue)
 
                         result.status = "success"
                         result.money_count = moneyRemoved
-                        result.stack_count = stacksRemoved
+                        result.bundle_count = bundlesRemoved
                         result.total_coins = totalCoins
 
-                        print("[ZomboidManager] Money deposit: " .. req.username .. " deposited " .. moneyRemoved .. " Money + " .. stacksRemoved .. " MoneyStack = " .. totalCoins .. " coins")
+                        print("[ZomboidManager] Money deposit: " .. req.username .. " deposited " .. moneyRemoved .. " Money + " .. bundlesRemoved .. " MoneyBundle = " .. totalCoins .. " coins")
                     end
 
                     -- Re-export inventory so the web reflects the change immediately

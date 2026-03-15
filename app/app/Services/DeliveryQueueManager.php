@@ -38,6 +38,17 @@ class DeliveryQueueManager
     }
 
     /**
+     * Give item to player with Lua-side verification (count before/after).
+     * Always queues to Lua — no RCON fast path — so delivery can be verified.
+     *
+     * @return array{id: string, action: string, username: string, item_type: string, count: int, status: string, created_at: string}
+     */
+    public function giveItemVerified(string $username, string $itemType, int $count = 1): array
+    {
+        return $this->addEntry('give_verified', $username, $itemType, $count);
+    }
+
+    /**
      * Remove items via Lua delivery queue.
      * PZ RCON removeitem is self-only (no player targeting), so removal always goes through Lua.
      *

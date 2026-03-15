@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import PublicLayout from '@/layouts/public-layout';
 import { fetchAction } from '@/lib/fetch-action';
-import type { DepositResult, ShopBundle, ShopCategory, ShopItem, ShopPromotion } from '@/types/server';
+import type { DepositResult, PurchaseStatusResponse, ShopBundle, ShopCategory, ShopItem, ShopPromotion } from '@/types/server';
 
 type ActivePromotion = Pick<ShopPromotion, 'name' | 'code' | 'type' | 'value' | 'ends_at'>;
 
@@ -26,6 +26,7 @@ type Props = {
     items: ShopItem[];
     bundles: ShopBundle[];
     balance: number | null;
+    availableBalance: number | null;
     activePromotions: ActivePromotion[];
     hasPzAccount: boolean;
     pendingDeposit: boolean;
@@ -85,7 +86,7 @@ function PromoRibbon({ promotions }: { promotions: ActivePromotion[] }) {
     );
 }
 
-export default function ShopIndex({ categories, items, bundles, balance: initialBalance, activePromotions, hasPzAccount, pendingDeposit: initialPendingDeposit, lastDepositResult: initialLastDepositResult }: Props) {
+export default function ShopIndex({ categories, items, bundles, balance: initialBalance, availableBalance: initialAvailableBalance, activePromotions, hasPzAccount, pendingDeposit: initialPendingDeposit, lastDepositResult: initialLastDepositResult }: Props) {
     const { auth } = usePage().props;
     const isAuthenticated = !!auth.user;
     const [filter, setFilter] = useState('');
@@ -101,20 +102,35 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
     const [depositCooldown, setDepositCooldown] = useState(0);
     const [depositError, setDepositError] = useState<string | null>(null);
     const [balance, setBalance] = useState(initialBalance);
+    const [availableBalance, setAvailableBalance] = useState(initialAvailableBalance);
+    const [pendingPurchaseId, setPendingPurchaseId] = useState<string | null>(null);
+    const dismissedResultIds = useRef<Set<string>>(new Set());
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const purchasePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    function dismissDepositResult() {
+        if (lastDepositResult?.id) {
+            dismissedResultIds.current.add(lastDepositResult.id);
+        }
+        setLastDepositResult(null);
+    }
 
     // Sync from server props when page re-renders via Inertia
     useEffect(() => {
         setPendingDeposit(initialPendingDeposit);
-        setLastDepositResult(initialLastDepositResult);
+        // Don't restore a result that was already dismissed
+        if (initialLastDepositResult && !dismissedResultIds.current.has(initialLastDepositResult.id)) {
+            setLastDepositResult(initialLastDepositResult);
+        }
         setBalance(initialBalance);
-    }, [initialPendingDeposit, initialLastDepositResult, initialBalance]);
+        setAvailableBalance(initialAvailableBalance);
+    }, [initialPendingDeposit, initialLastDepositResult, initialBalance, initialAvailableBalance]);
 
     // Auto-dismiss deposit result after 8 seconds
     useEffect(() => {
         if (!lastDepositResult) return;
-        const timer = setTimeout(() => setLastDepositResult(null), 8000);
+        const timer = setTimeout(() => dismissDepositResult(), 8000);
         return () => clearTimeout(timer);
     }, [lastDepositResult]);
 
@@ -134,7 +150,9 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
             if (!res.ok) return;
             const data = await res.json();
             setPendingDeposit(data.pendingDeposit);
-            setLastDepositResult(data.lastDepositResult);
+            if (data.lastDepositResult && !dismissedResultIds.current.has(data.lastDepositResult.id)) {
+                setLastDepositResult(data.lastDepositResult);
+            }
             if (data.balance !== undefined && data.balance !== null) {
                 setBalance(data.balance);
             }
@@ -156,6 +174,47 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
             pollRef.current = null;
         }
     }, [pendingDeposit, pollDepositStatus]);
+
+    // Poll purchase delivery status every 5 seconds while a purchase is pending
+    const pollPurchaseStatus = useCallback(async () => {
+        if (!pendingPurchaseId) return;
+        try {
+            const res = await fetch(`/shop/purchase/${pendingPurchaseId}/status`, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            if (!res.ok) return;
+            const data: PurchaseStatusResponse = await res.json();
+            if (data.balance !== undefined) setBalance(data.balance);
+            if (data.availableBalance !== undefined) setAvailableBalance(data.availableBalance);
+            if (data.is_complete) {
+                setPendingPurchaseId(null);
+                if (data.delivery_status === 'delivered') {
+                    toast.success('Items delivered and payment confirmed!');
+                } else if (data.delivery_status === 'failed') {
+                    toast.error('Delivery failed — no payment was charged.');
+                } else {
+                    toast.warning('Some items could not be delivered.');
+                }
+                router.reload();
+            }
+        } catch {
+            // Silently ignore polling errors
+        }
+    }, [pendingPurchaseId]);
+
+    useEffect(() => {
+        if (pendingPurchaseId) {
+            purchasePollRef.current = setInterval(pollPurchaseStatus, 5000);
+            return () => {
+                if (purchasePollRef.current) clearInterval(purchasePollRef.current);
+            };
+        }
+        if (purchasePollRef.current) {
+            clearInterval(purchasePollRef.current);
+            purchasePollRef.current = null;
+        }
+    }, [pendingPurchaseId, pollPurchaseStatus]);
 
     const filteredItems = useMemo(() => {
         let result = items;
@@ -182,14 +241,22 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                 quantity,
                 promotion_code: promoCode || undefined,
             },
-            successMessage: `Purchased ${quantity}x ${buyItem.name}`,
+            successMessage: `Delivering ${quantity}x ${buyItem.name}...`,
         });
         setLoading(false);
         if (result) {
             setBuyItem(null);
             setQuantity(1);
             setPromoCode('');
-            router.reload();
+            if (result.purchase_id) {
+                setPendingPurchaseId(result.purchase_id);
+            }
+            if (result.availableBalance !== undefined) {
+                setAvailableBalance(result.availableBalance);
+            }
+            if (result.balance !== undefined) {
+                setBalance(result.balance);
+            }
         }
     }
 
@@ -200,13 +267,21 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
             data: {
                 promotion_code: promoCode || undefined,
             },
-            successMessage: `Purchased ${buyBundle.name}`,
+            successMessage: `Delivering ${buyBundle.name}...`,
         });
         setLoading(false);
         if (result) {
             setBuyBundle(null);
             setPromoCode('');
-            router.reload();
+            if (result.purchase_id) {
+                setPendingPurchaseId(result.purchase_id);
+            }
+            if (result.availableBalance !== undefined) {
+                setAvailableBalance(result.availableBalance);
+            }
+            if (result.balance !== undefined) {
+                setBalance(result.balance);
+            }
         }
     }
 
@@ -292,7 +367,14 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                     {balance !== null && (
                         <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-2">
                             <Coins className="size-5 text-amber-500" />
-                            <span className="text-lg font-bold tabular-nums">{balance.toFixed(2)}</span>
+                            <div className="flex flex-col items-end">
+                                <span className="text-lg font-bold tabular-nums">{balance.toFixed(2)}</span>
+                                {availableBalance !== null && availableBalance < balance && (
+                                    <span className="text-muted-foreground text-xs tabular-nums">
+                                        {availableBalance.toFixed(2)} available
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -308,7 +390,7 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                             <CardTitle>Deposit In-Game Money</CardTitle>
                         </div>
                         <CardDescription>
-                            Convert Money and MoneyStack items from your inventory into shop coins
+                            Convert Money and MoneyBundle items from your inventory into shop coins
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -329,7 +411,7 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                                     </Badge>
                                     <Badge variant="outline" className="text-xs">
                                         <Coins className="mr-1 size-3 text-amber-500" />
-                                        MoneyStack = 10 coins
+                                        MoneyBundle = 100 coins
                                     </Badge>
                                 </div>
                             </div>
@@ -400,12 +482,12 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                                         )}
                                         <span className="flex-1">
                                             {lastDepositResult.status === 'success'
-                                                ? `Deposited ${lastDepositResult.total_coins} coins (${lastDepositResult.money_count} Money + ${lastDepositResult.stack_count} MoneyStack)`
+                                                ? `Deposited ${lastDepositResult.total_coins} coins (${lastDepositResult.money_count} Money + ${lastDepositResult.bundle_count ?? 0} MoneyBundle)`
                                                 : lastDepositResult.message || 'Deposit failed'}
                                         </span>
                                         <button
                                             type="button"
-                                            onClick={() => setLastDepositResult(null)}
+                                            onClick={() => dismissDepositResult()}
                                             className="shrink-0 rounded p-0.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
                                             aria-label="Dismiss"
                                         >
@@ -417,6 +499,21 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* Pending purchase delivery */}
+                {pendingPurchaseId && (
+                    <div className="flex items-center gap-3 rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 dark:border-blue-700 dark:bg-blue-950/40">
+                        <Loader2 className="size-5 animate-spin text-blue-500" />
+                        <div>
+                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                                Delivering items...
+                            </p>
+                            <p className="text-xs text-blue-600 dark:text-blue-400">
+                                Items are being delivered to your character. Payment will be charged once delivery is confirmed.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Featured section */}
                 {(featuredItems.length > 0 || featuredBundles.length > 0) && (
@@ -637,9 +734,10 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                                     </span>
                                 </div>
                             </div>
-                            {balance !== null && parseFloat(buyItem.price) * quantity > balance && (
+                            {availableBalance !== null && parseFloat(buyItem.price) * quantity > availableBalance && (
                                 <p className="text-sm text-destructive">
-                                    Insufficient balance. You need {(parseFloat(buyItem.price) * quantity - balance).toFixed(2)} more.
+                                    Insufficient balance. You need {(parseFloat(buyItem.price) * quantity - availableBalance).toFixed(2)} more.
+                                    {availableBalance < (balance ?? 0) && ' (some balance is held for pending deliveries)'}
                                 </p>
                             )}
                         </div>
@@ -649,7 +747,7 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                             Cancel
                         </Button>
                         <Button
-                            disabled={!buyItem || loading || (buyItem && balance !== null && parseFloat(buyItem.price) * quantity > balance)}
+                            disabled={!buyItem || loading || pendingPurchaseId !== null || (buyItem && availableBalance !== null && parseFloat(buyItem.price) * quantity > availableBalance)}
                             onClick={handleBuyItem}
                         >
                             <ShoppingBag className="mr-1.5 size-4" />
@@ -715,9 +813,10 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                                     </span>
                                 </div>
                             </div>
-                            {balance !== null && parseFloat(buyBundle.price) > balance && (
+                            {availableBalance !== null && parseFloat(buyBundle.price) > availableBalance && (
                                 <p className="text-sm text-destructive">
-                                    Insufficient balance. You need {(parseFloat(buyBundle.price) - balance).toFixed(2)} more.
+                                    Insufficient balance. You need {(parseFloat(buyBundle.price) - availableBalance).toFixed(2)} more.
+                                    {availableBalance < (balance ?? 0) && ' (some balance is held for pending deliveries)'}
                                 </p>
                             )}
                         </div>
@@ -727,7 +826,7 @@ export default function ShopIndex({ categories, items, bundles, balance: initial
                             Cancel
                         </Button>
                         <Button
-                            disabled={!buyBundle || loading || (buyBundle && balance !== null && parseFloat(buyBundle.price) > balance)}
+                            disabled={!buyBundle || loading || pendingPurchaseId !== null || (buyBundle && availableBalance !== null && parseFloat(buyBundle.price) > availableBalance)}
                             onClick={handleBuyBundle}
                         >
                             <ShoppingBag className="mr-1.5 size-4" />

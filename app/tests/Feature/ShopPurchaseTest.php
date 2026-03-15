@@ -75,8 +75,10 @@ it('purchases an item successfully', function () {
     ]);
 
     $response->assertOk();
-    $response->assertJsonStructure(['message', 'purchase_id', 'balance']);
+    $response->assertJsonStructure(['message', 'purchase_id', 'balance', 'availableBalance']);
+    // RCON delivers immediately for online players → wallet debited right away
     expect((float) $response->json('balance'))->toBe(900.0);
+    expect((float) $response->json('availableBalance'))->toBe(900.0);
 
     $this->assertDatabaseHas('shop_purchases', [
         'user_id' => $this->user->id,

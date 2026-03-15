@@ -32,6 +32,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('my/wallet', [ShopController::class, 'myWallet'])->name('my.wallet');
         Route::post('deposit', [ShopController::class, 'requestDeposit'])->name('deposit')->middleware('throttle:3,1');
         Route::get('deposit/status', [ShopController::class, 'depositStatus'])->name('deposit.status')->middleware('throttle:30,1');
+        Route::get('purchase/{purchaseId}/status', [ShopController::class, 'purchaseStatus'])->name('purchase.status')->middleware('throttle:30,1');
         Route::post('bundle/{slug}/purchase', [ShopController::class, 'purchaseBundle'])->name('bundle.purchase')->middleware('throttle:10,1');
         Route::post('{slug}/purchase', [ShopController::class, 'purchaseItem'])->name('purchase')->middleware('throttle:10,1');
     });

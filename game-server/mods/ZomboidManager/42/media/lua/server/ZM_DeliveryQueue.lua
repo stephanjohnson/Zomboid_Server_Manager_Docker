@@ -48,6 +48,53 @@ local function findPlayer(username)
     return nil
 end
 
+--- Count items of a specific type across inventory + backpack
+local function countItemType(player, itemType)
+    local total = 0
+    local inventory = player:getInventory()
+    if inventory then
+        local items = inventory:getItemsFromFullType(itemType)
+        if items then
+            total = total + items:size()
+        end
+    end
+
+    local backpack = player:getClothingItem_Back()
+    if backpack and backpack:getItemContainer() then
+        local items = backpack:getItemContainer():getItemsFromFullType(itemType)
+        if items then
+            total = total + items:size()
+        end
+    end
+
+    return total
+end
+
+--- Sync inventory to client after server-side item addition
+local function syncAddToClient(player, itemType, count)
+    local inventory = player:getInventory()
+    if inventory then
+        inventory:setDirty(true)
+        inventory:setDrawDirty(true)
+    end
+    -- Tell the client to add the item locally for instant UI update
+    if isServer() then
+        sendServerCommand(player, "ZomboidManager", "addItem", {
+            item_type = itemType,
+            count = tostring(count),
+        })
+    end
+end
+
+--- Sync inventory to client after server-side item removal
+local function syncRemoveToClient(player)
+    local inventory = player:getInventory()
+    if inventory then
+        inventory:setDirty(true)
+        inventory:setDrawDirty(true)
+    end
+end
+
 --- Give item to player (fallback when RCON is unavailable)
 local function giveItem(player, itemType, count)
     local inventory = player:getInventory()
@@ -62,15 +109,80 @@ local function giveItem(player, itemType, count)
         end
     end
 
-    -- Tell the client to add the item locally for instant UI update.
-    if isServer() then
-        sendServerCommand(player, "ZomboidManager", "addItem", {
-            item_type = itemType,
-            count = tostring(count),
-        })
-    end
+    syncAddToClient(player, itemType, count)
 
     return true, nil
+end
+
+--- Give item to player with verification (count before/after)
+local function giveItemVerified(player, itemType, count)
+    local inventory = player:getInventory()
+    if not inventory then
+        return false, "player has no inventory", nil
+    end
+
+    -- Step 1: Count items BEFORE giving
+    local countBefore = countItemType(player, itemType)
+
+    -- Step 2: Add items
+    for i = 1, count do
+        local item = inventory:AddItem(itemType)
+        if not item then
+            -- Partial add — count what we actually added and report
+            local countAfterPartial = countItemType(player, itemType)
+            local actuallyAdded = countAfterPartial - countBefore
+            if actuallyAdded > 0 then
+                -- Remove partially added items to keep things clean
+                for j = 1, actuallyAdded do
+                    local toRemove = inventory:getFirstTypeRecurse(itemType)
+                    if toRemove then
+                        local container = toRemove:getContainer()
+                        if container then
+                            container:DoRemoveItem(toRemove)
+                        else
+                            inventory:DoRemoveItem(toRemove)
+                        end
+                    end
+                end
+            end
+            return false, "failed to add item " .. itemType .. " (attempt " .. i .. "/" .. count .. ")", nil
+        end
+    end
+
+    -- Step 3: Count items AFTER giving
+    local countAfter = countItemType(player, itemType)
+
+    -- Step 4: Verify count
+    local verified = countAfter >= countBefore + count
+    if not verified then
+        -- Verification failed — try to rollback
+        local actuallyAdded = countAfter - countBefore
+        print("[ZomboidManager] WARNING: give_verified failed verification for " .. itemType ..
+              " — expected >=" .. (countBefore + count) .. " but got " .. countAfter)
+        -- Remove what was added
+        for j = 1, actuallyAdded do
+            local toRemove = inventory:getFirstTypeRecurse(itemType)
+            if toRemove then
+                local container = toRemove:getContainer()
+                if container then
+                    container:DoRemoveItem(toRemove)
+                else
+                    inventory:DoRemoveItem(toRemove)
+                end
+            end
+        end
+        return false, "verification failed: expected >=" .. (countBefore + count) .. " items but found " .. countAfter, nil
+    end
+
+    syncAddToClient(player, itemType, count)
+
+    local verificationData = {
+        count_before = countBefore,
+        count_after = countAfter,
+        verified = true,
+    }
+
+    return true, nil, verificationData
 end
 
 --- Remove a single item from the player, handling equipped/worn items.
@@ -121,13 +233,12 @@ local function removeItem(player, itemType, count)
     end
 
     -- Tell the client to mirror the removal for instant UI update.
-    -- Server-side container removal doesn't sync to the client in PZ,
-    -- so the client handler removes the item from its local copy.
     if isServer() and removed > 0 then
         sendServerCommand(player, "ZomboidManager", "removeItem", {
             item_type = itemType,
             count = tostring(removed),
         })
+        syncRemoveToClient(player)
     end
 
     return true, nil
@@ -176,9 +287,11 @@ function ZM_DeliveryQueue.process()
             if not player then
                 result.message = "player '" .. entry.username .. "' not online"
             else
-                local success, errMsg
+                local success, errMsg, verificationData
                 if entry.action == "give" then
                     success, errMsg = giveItem(player, entry.item_type, entry.count or 1)
+                elseif entry.action == "give_verified" then
+                    success, errMsg, verificationData = giveItemVerified(player, entry.item_type, entry.count or 1)
                 elseif entry.action == "remove" then
                     success, errMsg = removeItem(player, entry.item_type, entry.count or 1)
                 else
@@ -188,6 +301,12 @@ function ZM_DeliveryQueue.process()
                 if success then
                     result.status = "delivered"
                     print("[ZomboidManager] Delivered: " .. entry.action .. " " .. (entry.count or 1) .. "x " .. entry.item_type .. " for " .. entry.username)
+                    -- Include verification data if present
+                    if verificationData then
+                        result.verified = true
+                        result.count_before = verificationData.count_before
+                        result.count_after = verificationData.count_after
+                    end
                     -- Re-export inventory so the web reflects the change immediately
                     ZM_InventoryExporter.exportPlayer(player)
                 else

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\TransactionSource;
 use App\Enums\TransactionType;
 use App\Exceptions\InsufficientBalanceException;
+use App\Enums\DeliveryStatus;
 use App\Models\ShopPurchase;
 use App\Models\User;
 use App\Models\Wallet;
@@ -149,6 +150,28 @@ class WalletService
     public function getBalance(User $user): float
     {
         return (float) ($user->wallet()->value('balance') ?? 0);
+    }
+
+    /**
+     * Get available balance (actual balance minus pending purchase holds).
+     *
+     * Pending purchases that haven't been debited yet (wallet_transaction_id is null)
+     * still "hold" their total_price from the available balance to prevent double-spending.
+     */
+    public function getAvailableBalance(User $user): float
+    {
+        $balance = $this->getBalance($user);
+
+        $pendingHolds = (float) ShopPurchase::query()
+            ->where('user_id', $user->id)
+            ->whereNull('wallet_transaction_id')
+            ->whereNotIn('delivery_status', [
+                DeliveryStatus::Failed->value,
+                DeliveryStatus::Delivered->value,
+            ])
+            ->sum('total_price');
+
+        return max(0, $balance - $pendingHolds);
     }
 
     /**
