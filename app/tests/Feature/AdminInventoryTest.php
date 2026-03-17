@@ -25,6 +25,9 @@ function mockInventoryReader(?array $inventory = null): void
     $reader->shouldReceive('getPlayerInventory')
         ->andReturn($inventory)
         ->byDefault();
+    $reader->shouldReceive('requestExport')
+        ->andReturn(true)
+        ->byDefault();
 
     app()->instance(InventoryReader::class, $reader);
 }

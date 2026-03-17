@@ -12,7 +12,7 @@ beforeEach(function () {
         $this->tempDir.'/inventory/TestPlayer.json'
     );
 
-    $this->reader = new InventoryReader($this->tempDir.'/inventory');
+    $this->reader = new InventoryReader($this->tempDir.'/inventory', $this->tempDir.'/export_requests.json');
 });
 
 afterEach(function () {
@@ -55,7 +55,7 @@ it('lists players with inventory snapshots', function () {
 });
 
 it('returns empty array when inventory directory is missing', function () {
-    $reader = new InventoryReader('/nonexistent/path');
+    $reader = new InventoryReader('/nonexistent/path', '/tmp/nonexistent_export.json');
 
     expect($reader->listPlayers())->toBe([]);
 });

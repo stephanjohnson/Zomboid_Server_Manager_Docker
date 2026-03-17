@@ -1,5 +1,5 @@
 import { Deferred, Head, Link } from '@inertiajs/react';
-import { Clock, Crosshair, Medal, Skull, Swords, Trophy, Users } from 'lucide-react';
+import { Clock, Coins, Crosshair, Medal, ShoppingCart, Skull, Swords, Trophy, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { AnimatedCounter } from '@/components/animated-counter';
@@ -7,9 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import PublicLayout from '@/layouts/public-layout';
-import type { DeathLeaderboardEntry, LeaderboardEntry, RankingsPageData, RatioLeaderboardEntry } from '@/types';
+import type { DeathLeaderboardEntry, LeaderboardEntry, RankingsPageData, RatioLeaderboardEntry, WalletLeaderboardEntry } from '@/types';
 
-type TabKey = 'kills' | 'survival' | 'deaths' | 'kd' | 'hd' | 'pvpd';
+type TabKey = 'kills' | 'survival' | 'deaths' | 'kd' | 'hd' | 'pvpd' | 'spent' | 'balance';
 
 function RankBadge({ rank }: { rank: number }) {
     if (rank === 1) {
@@ -175,6 +175,38 @@ function RatioTable({ data, unit }: { data: RatioLeaderboardEntry[]; unit?: stri
     );
 }
 
+function WalletTable({ data, field }: { data: WalletLeaderboardEntry[]; field: 'total_spent' | 'balance' }) {
+    if (data.length === 0) {
+        return <p className="py-8 text-center text-sm text-muted-foreground">No wallet data yet</p>;
+    }
+
+    return (
+        <div className="space-y-1">
+            {data.map((entry, i) => (
+                <motion.div
+                    key={entry.username}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: i * 0.03 }}
+                >
+                    <Link
+                        href={`/rankings/${entry.username}`}
+                        className="flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted/50"
+                    >
+                        <div className="flex items-center gap-3">
+                            <RankBadge rank={entry.rank} />
+                            <span className="font-medium">{entry.username}</span>
+                        </div>
+                        <span className="font-semibold tabular-nums">
+                            {entry[field].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                    </Link>
+                </motion.div>
+            ))}
+        </div>
+    );
+}
+
 function LeaderboardSkeleton() {
     return (
         <div className="space-y-2 py-2">
@@ -198,6 +230,8 @@ const tabs: { key: TabKey; label: string; icon: typeof Skull }[] = [
     { key: 'kd', label: 'Kills/Death', icon: Crosshair },
     { key: 'hd', label: 'Hours/Death', icon: Clock },
     { key: 'pvpd', label: 'PvP Kills/Death', icon: Swords },
+    { key: 'spent', label: 'Spent', icon: ShoppingCart },
+    { key: 'balance', label: 'Balance', icon: Coins },
 ];
 
 export default function Rankings({
@@ -208,6 +242,8 @@ export default function Rankings({
     leaderboard_kd,
     leaderboard_hd,
     leaderboard_pvpd,
+    leaderboard_spent,
+    leaderboard_balance,
 }: RankingsPageData) {
     const [activeTab, setActiveTab] = useState<TabKey>('kills');
 
@@ -342,6 +378,16 @@ export default function Rankings({
                             {activeTab === 'pvpd' && (
                                 <Deferred data="leaderboard_pvpd" fallback={<LeaderboardSkeleton />}>
                                     <RatioTable data={leaderboard_pvpd ?? []} />
+                                </Deferred>
+                            )}
+                            {activeTab === 'spent' && (
+                                <Deferred data="leaderboard_spent" fallback={<LeaderboardSkeleton />}>
+                                    <WalletTable data={leaderboard_spent ?? []} field="total_spent" />
+                                </Deferred>
+                            )}
+                            {activeTab === 'balance' && (
+                                <Deferred data="leaderboard_balance" fallback={<LeaderboardSkeleton />}>
+                                    <WalletTable data={leaderboard_balance ?? []} field="balance" />
                                 </Deferred>
                             )}
                         </CardContent>

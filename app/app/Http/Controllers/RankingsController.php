@@ -22,6 +22,8 @@ class RankingsController extends Controller
             'leaderboard_kd' => Inertia::defer(fn () => $this->playerStatsService->getRatioLeaderboard('kills_per_death', 25)),
             'leaderboard_hd' => Inertia::defer(fn () => $this->playerStatsService->getRatioLeaderboard('hours_per_death', 25)),
             'leaderboard_pvpd' => Inertia::defer(fn () => $this->playerStatsService->getRatioLeaderboard('pvp_per_death', 25)),
+            'leaderboard_spent' => Inertia::defer(fn () => $this->playerStatsService->getWalletLeaderboard('total_spent', 25)),
+            'leaderboard_balance' => Inertia::defer(fn () => $this->playerStatsService->getWalletLeaderboard('balance', 25)),
             'server_name' => config('zomboid.server_name', 'Project Zomboid Server'),
         ]);
     }

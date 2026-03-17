@@ -189,6 +189,13 @@ export type RatioLeaderboardEntry = {
     death_count: number;
 };
 
+export type WalletLeaderboardEntry = {
+    rank: number;
+    username: string;
+    balance: number;
+    total_spent: number;
+};
+
 export type RankingsPageData = {
     server_stats: ServerStats;
     leaderboard_kills: LeaderboardEntry[];
@@ -197,6 +204,8 @@ export type RankingsPageData = {
     leaderboard_kd: RatioLeaderboardEntry[];
     leaderboard_hd: RatioLeaderboardEntry[];
     leaderboard_pvpd: RatioLeaderboardEntry[];
+    leaderboard_spent: WalletLeaderboardEntry[];
+    leaderboard_balance: WalletLeaderboardEntry[];
     server_name: string;
 };
 

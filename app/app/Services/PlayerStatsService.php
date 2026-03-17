@@ -292,6 +292,30 @@ class PlayerStatsService
     }
 
     /**
+     * Get wallet leaderboard (by balance or total_spent).
+     *
+     * @return array<int, array{rank: int, username: string, balance: float, total_spent: float}>
+     */
+    public function getWalletLeaderboard(string $stat = 'total_spent', int $limit = 25): array
+    {
+        return DB::table('wallets')
+            ->join('users', 'wallets.user_id', '=', 'users.id')
+            ->where("wallets.{$stat}", '>', 0)
+            ->orderByDesc("wallets.{$stat}")
+            ->limit($limit)
+            ->select('users.username', 'wallets.balance', 'wallets.total_spent')
+            ->get()
+            ->values()
+            ->map(fn ($row, int $index) => [
+                'rank' => $index + 1,
+                'username' => $row->username,
+                'balance' => round((float) $row->balance, 2),
+                'total_spent' => round((float) $row->total_spent, 2),
+            ])
+            ->all();
+    }
+
+    /**
      * Read and parse the stats JSON file.
      *
      * @return array{timestamp: string, player_count: int, players: array<int, array{username: string, zombie_kills: int, hours_survived: float, profession: string|null, skills: array<string, int>, is_dead: bool}>}|null

@@ -3,6 +3,7 @@
 use App\Models\GameEvent;
 use App\Models\PlayerStat;
 use App\Models\User;
+use App\Models\Wallet;
 use App\Services\PlayerStatsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -272,4 +273,46 @@ it('player profile is accessible by regular players', function () {
     $response = $this->actingAs($user)->get('/rankings/TestPlayer');
 
     $response->assertOk();
+});
+
+// --- Wallet Leaderboard tests ---
+
+test('getWalletLeaderboard ranks by total_spent correctly', function () {
+    $alice = User::factory()->create(['username' => 'Alice']);
+    $bob = User::factory()->create(['username' => 'Bob']);
+    $charlie = User::factory()->create(['username' => 'Charlie']);
+
+    Wallet::query()->create(['user_id' => $alice->id, 'balance' => 10, 'total_earned' => 100, 'total_spent' => 90]);
+    Wallet::query()->create(['user_id' => $bob->id, 'balance' => 50, 'total_earned' => 200, 'total_spent' => 150]);
+    Wallet::query()->create(['user_id' => $charlie->id, 'balance' => 0, 'total_earned' => 0, 'total_spent' => 0]);
+
+    $service = new PlayerStatsService('/nonexistent');
+    $leaderboard = $service->getWalletLeaderboard('total_spent', 25);
+
+    expect($leaderboard)->toHaveCount(2) // Charlie excluded (0 spent)
+        ->and($leaderboard[0]['rank'])->toBe(1)
+        ->and($leaderboard[0]['username'])->toBe('Bob')
+        ->and($leaderboard[0]['total_spent'])->toBe(150.0)
+        ->and($leaderboard[1]['rank'])->toBe(2)
+        ->and($leaderboard[1]['username'])->toBe('Alice')
+        ->and($leaderboard[1]['total_spent'])->toBe(90.0);
+});
+
+test('getWalletLeaderboard ranks by balance correctly', function () {
+    $alice = User::factory()->create(['username' => 'Alice']);
+    $bob = User::factory()->create(['username' => 'Bob']);
+
+    Wallet::query()->create(['user_id' => $alice->id, 'balance' => 500, 'total_earned' => 500, 'total_spent' => 0]);
+    Wallet::query()->create(['user_id' => $bob->id, 'balance' => 200, 'total_earned' => 300, 'total_spent' => 100]);
+
+    $service = new PlayerStatsService('/nonexistent');
+    $leaderboard = $service->getWalletLeaderboard('balance', 25);
+
+    expect($leaderboard)->toHaveCount(2)
+        ->and($leaderboard[0]['rank'])->toBe(1)
+        ->and($leaderboard[0]['username'])->toBe('Alice')
+        ->and($leaderboard[0]['balance'])->toBe(500.0)
+        ->and($leaderboard[1]['rank'])->toBe(2)
+        ->and($leaderboard[1]['username'])->toBe('Bob')
+        ->and($leaderboard[1]['balance'])->toBe(200.0);
 });
