@@ -160,13 +160,25 @@ CADDY_HTTPS_PORT=443
 
 case "$access_choice" in
     1)
-        prompt SITE_HOST "Domain name" ""
+        while true; do
+            prompt SITE_HOST "Domain name" ""
+            if [ -n "$SITE_HOST" ] && [[ "$SITE_HOST" =~ ^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$ ]]; then
+                break
+            fi
+            echo -e "  ${RED}Invalid domain name. Try again.${NC}"
+        done
         APP_URL="https://${SITE_HOST}"
         CADDY_SITE="${SITE_HOST}"
         CADDY_TLS=""
         ;;
     2)
-        prompt SITE_HOST "Server IP address" ""
+        while true; do
+            prompt SITE_HOST "Server IP address" ""
+            if [ -n "$SITE_HOST" ] && [[ "$SITE_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                break
+            fi
+            echo -e "  ${RED}Invalid IP address. Try again.${NC}"
+        done
         APP_URL="https://${SITE_HOST}"
         CADDY_SITE="${SITE_HOST}"
         CADDY_TLS=$'\ttls internal'

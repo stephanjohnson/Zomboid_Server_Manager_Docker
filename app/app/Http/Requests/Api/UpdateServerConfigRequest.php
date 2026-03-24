@@ -20,7 +20,7 @@ class UpdateServerConfigRequest extends FormRequest
     {
         return [
             'settings' => ['required', 'array', 'min:1'],
-            'settings.*' => ['required', 'string', new SafeConfigValue],
+            'settings.*' => ['required', 'string', new SafeConfigValue(allowBackslash: true)],
         ];
     }
 
