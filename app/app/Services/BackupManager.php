@@ -157,7 +157,7 @@ class BackupManager
 
         $entries = array_filter(explode("\n", trim($listResult->output())));
         foreach ($entries as $entry) {
-            if (str_contains($entry, '..') || str_starts_with($entry, '/')) {
+            if (preg_match('#(^|/)\.\.(/|$)#', $entry) || str_starts_with($entry, '/')) {
                 throw new \RuntimeException("Backup contains unsafe path: {$entry}");
             }
         }

@@ -64,8 +64,13 @@ class ShopPurchaseService
         $totalPrice = max(0, ((float) $item->price * $quantity) - $discount);
 
         $purchase = DB::transaction(function () use ($user, $item, $quantity, $promotion, $discount, $totalPrice) {
-            // Lock wallet row to prevent concurrent purchases from double-spending
-            Wallet::query()->where('user_id', $user->id)->lockForUpdate()->first();
+            // Lock wallet row to prevent concurrent purchases from double-spending.
+            // Uses fresh query (not cached relation) to find or create, then locks by ID.
+            $wallet = Wallet::query()->firstOrCreate(
+                ['user_id' => $user->id],
+                ['balance' => 0, 'total_earned' => 0, 'total_spent' => 0],
+            );
+            Wallet::query()->lockForUpdate()->find($wallet->id);
 
             $availableBalance = $this->walletService->getAvailableBalance($user);
             if ($availableBalance < $totalPrice) {
@@ -160,8 +165,13 @@ class ShopPurchaseService
         $totalPrice = max(0, (float) $bundle->price - $discount);
 
         $purchase = DB::transaction(function () use ($user, $bundle, $promotion, $discount, $totalPrice) {
-            // Lock wallet row to prevent concurrent purchases from double-spending
-            Wallet::query()->where('user_id', $user->id)->lockForUpdate()->first();
+            // Lock wallet row to prevent concurrent purchases from double-spending.
+            // Uses fresh query (not cached relation) to find or create, then locks by ID.
+            $wallet = Wallet::query()->firstOrCreate(
+                ['user_id' => $user->id],
+                ['balance' => 0, 'total_earned' => 0, 'total_spent' => 0],
+            );
+            Wallet::query()->lockForUpdate()->find($wallet->id);
 
             $availableBalance = $this->walletService->getAvailableBalance($user);
             if ($availableBalance < $totalPrice) {

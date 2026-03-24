@@ -13,6 +13,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -51,6 +52,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Global route patterns — enforce max length to match RconSanitizer limits
+        Route::pattern('name', '[a-zA-Z0-9_]{1,50}');
+        Route::pattern('username', '[a-zA-Z0-9_]{1,50}');
+
         $this->configureDefaults();
         $this->configureRateLimiting();
 

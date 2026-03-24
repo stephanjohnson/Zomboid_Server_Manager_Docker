@@ -13,9 +13,9 @@ use Illuminate\Contracts\Validation\ValidationRule;
 class RconSafeIdentifier implements ValidationRule
 {
     private const PATTERNS = [
-        'player' => '/^[a-zA-Z0-9_]+$/',
-        'item' => '/^[a-zA-Z0-9_.]+$/',
-        'skill' => '/^[a-zA-Z0-9]+$/',
+        'player' => '/^[a-zA-Z0-9_]{1,50}$/',
+        'item' => '/^[a-zA-Z0-9_.]{1,100}$/',
+        'skill' => '/^[a-zA-Z0-9]{1,50}$/',
     ];
 
     public function __construct(

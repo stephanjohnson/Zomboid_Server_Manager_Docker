@@ -50,7 +50,7 @@ class ConfigController extends Controller
     {
         $settings = $request->validate([
             'settings' => 'required|array|min:1',
-            'settings.*' => ['string', new SafeConfigValue],
+            'settings.*' => ['string', new SafeConfigValue(allowBackslash: true)],
         ])['settings'];
 
         $path = config('zomboid.paths.server_ini');

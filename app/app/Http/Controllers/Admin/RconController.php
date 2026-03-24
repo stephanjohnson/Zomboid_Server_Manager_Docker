@@ -35,7 +35,7 @@ class RconController extends Controller
             $this->rcon->connect();
             $response = $this->rcon->command($command);
         } catch (\Throwable $e) {
-            Log::error('RCON command failed', ['command' => $command, 'error' => $e->getMessage()]);
+            Log::error('RCON command failed', ['command_verb' => explode(' ', $command, 2)[0], 'error' => $e->getMessage()]);
 
             $errorMessage = app()->isProduction()
                 ? 'RCON command failed — server may be offline'
