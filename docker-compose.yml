@@ -31,7 +31,7 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:${APP_PORT:-8000}:8000"
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     volumes:
       - ./app:/var/www/html
       - app-vendor:/var/www/html/vendor
@@ -166,7 +166,7 @@ services:
   # Docker Socket Proxy — Restricted Docker API access for app/queue
   # ---------------------------------------------------------------------------
   docker-socket-proxy:
-    image: tecnativa/docker-socket-proxy:latest
+    image: tecnativa/docker-socket-proxy:v0.4.2
     container_name: pz-docker-proxy
     restart: unless-stopped
     environment:
@@ -182,7 +182,7 @@ services:
   # Caddy — Reverse proxy with automatic TLS
   # ---------------------------------------------------------------------------
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.11.2-alpine
     container_name: pz-caddy
     restart: unless-stopped
     ports:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Zomboid Manager — First-Time Setup
@@ -38,14 +38,14 @@ prompt() {
 
     if [ "$is_secret" = "true" ]; then
         echo -ne "  ${label} ${DIM}[hidden]${NC}: "
-        read -rs value
+        read -rs value || true
         echo ""
     elif [ -n "$default" ]; then
         echo -ne "  ${label} ${DIM}[${default}]${NC}: "
-        read -r value
+        read -r value || true
     else
         echo -ne "  ${label}: "
-        read -r value
+        read -r value || true
     fi
 
     value="${value:-$default}"
@@ -69,7 +69,7 @@ if [ -f .env ] || [ -f app/.env ]; then
     echo ""
     echo -e "${YELLOW}Existing .env file(s) detected.${NC}"
     echo -ne "  Overwrite and reconfigure? ${DIM}[y/N]${NC}: "
-    read -r overwrite
+    read -r overwrite || true
     if [ "${overwrite,,}" != "y" ]; then
         echo "Cancelled."
         exit 0
@@ -87,7 +87,7 @@ section "Environment"
 echo "  1) Production  (recommended for real servers)"
 echo "  2) Development (debug mode, Vite dev server)"
 echo -ne "  ${DIM}[1]${NC}: "
-read -r env_choice
+read -r env_choice || true
 env_choice="${env_choice:-1}"
 
 if [ "$env_choice" = "2" ]; then
@@ -113,7 +113,7 @@ prompt ADMIN_USERNAME "Username" "admin"
 # Generate a random password as default
 DEFAULT_ADMIN_PASS=$(generate_secret 18 16)
 echo -ne "  Password ${DIM}[auto-generated]${NC}: "
-read -rs ADMIN_PASSWORD
+read -rs ADMIN_PASSWORD || true
 echo ""
 if [ -z "$ADMIN_PASSWORD" ]; then
     ADMIN_PASSWORD="$DEFAULT_ADMIN_PASS"
@@ -134,7 +134,7 @@ echo "  Steam branch:"
 echo "    1) public  — Stable release (recommended)"
 echo "    2) b42     — Build 42 beta"
 echo -ne "  ${DIM}[1]${NC}: "
-read -r branch_choice
+read -r branch_choice || true
 branch_choice="${branch_choice:-1}"
 if [ "$branch_choice" = "2" ]; then
     PZ_STEAM_BRANCH="b42"
@@ -151,7 +151,7 @@ echo "  1) Domain name  (e.g., zomboid.example.com — auto Let's Encrypt)"
 echo "  2) Public IP     (e.g., 203.0.113.50 — self-signed cert)"
 echo "  3) Localhost only (local dev — self-signed cert)"
 echo -ne "  ${DIM}[3]${NC}: "
-read -r access_choice
+read -r access_choice || true
 access_choice="${access_choice:-3}"
 
 APP_PORT=8000
@@ -193,7 +193,7 @@ echo -e "  Panel:        ${GREEN}${APP_URL}${NC} (HTTPS via Caddy)"
 echo -e "  Architecture: ${GREEN}${ARCH_LABEL}${NC}"
 echo ""
 echo -ne "  Proceed? ${DIM}[Y/n]${NC}: "
-read -r proceed
+read -r proceed || true
 if [ "${proceed,,}" = "n" ]; then
     echo "Cancelled."
     exit 0

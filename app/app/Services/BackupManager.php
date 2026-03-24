@@ -151,12 +151,14 @@ class BackupManager
 
         // Validate archive contents to prevent tar slip (path traversal)
         $listResult = Process::timeout(30)->run(['tar', '-tzf', $backup->path]);
-        if ($listResult->successful()) {
-            $entries = array_filter(explode("\n", trim($listResult->output())));
-            foreach ($entries as $entry) {
-                if (str_contains($entry, '..') || str_starts_with($entry, '/')) {
-                    throw new \RuntimeException("Backup contains unsafe path: {$entry}");
-                }
+        if (! $listResult->successful()) {
+            throw new \RuntimeException('Failed to list backup contents for validation: '.$listResult->errorOutput());
+        }
+
+        $entries = array_filter(explode("\n", trim($listResult->output())));
+        foreach ($entries as $entry) {
+            if (str_contains($entry, '..') || str_starts_with($entry, '/')) {
+                throw new \RuntimeException("Backup contains unsafe path: {$entry}");
             }
         }
 
