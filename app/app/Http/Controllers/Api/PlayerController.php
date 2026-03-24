@@ -11,6 +11,7 @@ use App\Http\Requests\Api\TeleportPlayerRequest;
 use App\Services\AuditLogger;
 use App\Services\OnlinePlayersReader;
 use App\Services\RconClient;
+use App\Services\RconSanitizer;
 use Illuminate\Http\JsonResponse;
 
 class PlayerController
@@ -45,11 +46,13 @@ class PlayerController
 
     public function kick(string $name, KickPlayerRequest $request): JsonResponse
     {
+        $name = RconSanitizer::playerName($name);
         $reason = $request->validated('reason');
+        $safeReason = $reason ? RconSanitizer::message($reason) : null;
 
         return $this->executePlayerCommand(
             name: $name,
-            command: $reason ? "kickuser \"{$name}\" -r \"{$reason}\"" : "kickuser \"{$name}\"",
+            command: $safeReason ? "kickuser \"{$name}\" -r \"{$safeReason}\"" : "kickuser \"{$name}\"",
             action: 'player.kick',
             details: ['reason' => $reason],
             ip: $request->ip(),
@@ -59,6 +62,7 @@ class PlayerController
 
     public function ban(string $name, BanPlayerRequest $request): JsonResponse
     {
+        $name = RconSanitizer::playerName($name);
         $reason = $request->validated('reason');
         $ipBan = $request->validated('ip_ban', false);
 
@@ -91,6 +95,8 @@ class PlayerController
 
     public function unban(string $name): JsonResponse
     {
+        $name = RconSanitizer::playerName($name);
+
         return $this->executePlayerCommand(
             name: $name,
             command: "unbanuser \"{$name}\"",
@@ -103,7 +109,8 @@ class PlayerController
 
     public function setAccessLevel(string $name, SetAccessLevelRequest $request): JsonResponse
     {
-        $level = $request->validated('level');
+        $name = RconSanitizer::playerName($name);
+        $level = RconSanitizer::accessLevel($request->validated('level'));
 
         return $this->executePlayerCommand(
             name: $name,
@@ -117,10 +124,12 @@ class PlayerController
 
     public function teleport(string $name, TeleportPlayerRequest $request): JsonResponse
     {
+        $name = RconSanitizer::playerName($name);
         $targetPlayer = $request->validated('target_player');
 
         if ($targetPlayer) {
-            $command = "teleportto \"{$name}\" \"{$targetPlayer}\"";
+            $safeTarget = RconSanitizer::playerName($targetPlayer);
+            $command = "teleportto \"{$name}\" \"{$safeTarget}\"";
             $details = ['target_player' => $targetPlayer];
         } else {
             $x = $request->validated('x');
@@ -142,7 +151,8 @@ class PlayerController
 
     public function addItem(string $name, AddItemRequest $request): JsonResponse
     {
-        $itemId = $request->validated('item_id');
+        $name = RconSanitizer::playerName($name);
+        $itemId = RconSanitizer::itemId($request->validated('item_id'));
         $count = $request->validated('count', 1);
 
         return $this->executePlayerCommand(
@@ -157,7 +167,8 @@ class PlayerController
 
     public function addXp(string $name, AddXpRequest $request): JsonResponse
     {
-        $skill = $request->validated('skill');
+        $name = RconSanitizer::playerName($name);
+        $skill = RconSanitizer::skill($request->validated('skill'));
         $amount = $request->validated('amount');
 
         return $this->executePlayerCommand(
@@ -172,6 +183,8 @@ class PlayerController
 
     public function godmode(string $name): JsonResponse
     {
+        $name = RconSanitizer::playerName($name);
+
         return $this->executePlayerCommand(
             name: $name,
             command: "godmod \"{$name}\"",
