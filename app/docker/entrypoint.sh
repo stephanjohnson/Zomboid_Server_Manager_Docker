@@ -1,6 +1,15 @@
 #!/bin/sh
 set -e
 
+# ── Required env vars ─────────────────────────────────────────────
+for var in DB_PASSWORD PZ_RCON_PASSWORD ADMIN_PASSWORD PZ_ADMIN_PASSWORD; do
+    val=$(printenv "$var" 2>/dev/null || true)
+    if [ -z "$val" ]; then
+        echo "[entrypoint] FATAL: $var is not set. Set it in .env before starting."
+        exit 1
+    fi
+done
+
 # ── Storage permissions ──────────────────────────────────────────────
 # Bind mounts override Dockerfile permissions — fix at runtime
 # Only target directories and runtime files, skip .gitignore to avoid git noise

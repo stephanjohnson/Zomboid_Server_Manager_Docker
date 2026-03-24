@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,20 +18,17 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         then: function () {
-            // Global route patterns — enforce max length to match RconSanitizer limits
-            \Illuminate\Support\Facades\Route::pattern('name', '[a-zA-Z0-9_]{1,50}');
-            \Illuminate\Support\Facades\Route::pattern('username', '[a-zA-Z0-9_]{1,50}');
-
             \Illuminate\Support\Facades\Route::middleware([])->group(function () {
                 \Illuminate\Support\Facades\Route::get('ping', fn () => response('pong', 200, ['Cache-Control' => 'no-store']))->name('ping');
             });
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->trustProxies(at: '*');
+        $middleware->trustProxies(at: ['127.0.0.1', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']);
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
+            SecurityHeaders::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
@@ -43,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->api(prepend: [
+            SecurityHeaders::class,
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
         ]);
     })

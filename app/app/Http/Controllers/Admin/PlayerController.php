@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdminSetPasswordRequest;
+use App\Http\Requests\Admin\BanPlayerRequest;
+use App\Http\Requests\Admin\KickPlayerRequest;
+use App\Http\Requests\Admin\SetAccessLevelRequest;
 use App\Models\PlayerStat;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -13,7 +16,6 @@ use App\Services\RconClient;
 use App\Services\RconSanitizer;
 use App\Services\RespawnDelayManager;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -87,10 +89,10 @@ class PlayerController extends Controller
         ]);
     }
 
-    public function kick(Request $request, string $name): JsonResponse
+    public function kick(KickPlayerRequest $request, string $name): JsonResponse
     {
         $name = RconSanitizer::playerName($name);
-        $reason = RconSanitizer::message($request->input('reason', ''));
+        $reason = RconSanitizer::message($request->validated('reason', ''));
 
         try {
             $this->rcon->connect();
@@ -111,11 +113,11 @@ class PlayerController extends Controller
         return response()->json(['message' => "Kicked {$name}", 'rcon_response' => $response, 'command' => $command]);
     }
 
-    public function ban(Request $request, string $name): JsonResponse
+    public function ban(BanPlayerRequest $request, string $name): JsonResponse
     {
         $name = RconSanitizer::playerName($name);
-        $reason = $request->input('reason', '');
-        $ipBan = $request->boolean('ip_ban');
+        $reason = RconSanitizer::message($request->validated('reason', ''));
+        $ipBan = $request->validated('ip_ban', false);
 
         try {
             $this->rcon->connect();
@@ -138,10 +140,10 @@ class PlayerController extends Controller
         return response()->json(['message' => "Banned {$name}"]);
     }
 
-    public function setAccessLevel(Request $request, string $name): JsonResponse
+    public function setAccessLevel(SetAccessLevelRequest $request, string $name): JsonResponse
     {
         $name = RconSanitizer::playerName($name);
-        $level = RconSanitizer::accessLevel($request->input('level', 'none'));
+        $level = RconSanitizer::accessLevel($request->validated('level'));
 
         try {
             $this->rcon->connect();

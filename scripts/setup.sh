@@ -131,16 +131,21 @@ prompt PZ_MAX_PLAYERS "Max players" "16"
 prompt PZ_MAX_RAM "Max RAM" "4096m"
 
 echo "  Steam branch:"
-echo "    1) public  — Stable release (recommended)"
-echo "    2) b42     — Build 42 beta"
+echo "    1) public   — Stable release (recommended)"
+echo "    2) unstable — Latest unstable/experimental"
+echo "    3) Custom   — Enter a branch name manually"
 echo -ne "  ${DIM}[1]${NC}: "
 read -r branch_choice || true
 branch_choice="${branch_choice:-1}"
-if [ "$branch_choice" = "2" ]; then
-    PZ_STEAM_BRANCH="b42"
-else
-    PZ_STEAM_BRANCH="public"
-fi
+case "$branch_choice" in
+    2) PZ_STEAM_BRANCH="unstable" ;;
+    3)
+        echo -ne "  Branch name: "
+        read -r PZ_STEAM_BRANCH || true
+        PZ_STEAM_BRANCH="${PZ_STEAM_BRANCH:-public}"
+        ;;
+    *) PZ_STEAM_BRANCH="public" ;;
+esac
 
 prompt PZ_SERVER_PASSWORD "Server password (empty = open)" ""
 

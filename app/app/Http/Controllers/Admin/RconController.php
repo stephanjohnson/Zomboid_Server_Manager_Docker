@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ExecuteRconRequest;
 use App\Services\AuditLogger;
 use App\Services\RconClient;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,13 +23,9 @@ class RconController extends Controller
         return Inertia::render('admin/rcon');
     }
 
-    public function execute(Request $request): JsonResponse
+    public function execute(ExecuteRconRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'command' => ['required', 'string', 'max:500', 'regex:/^[^\n\r]*$/'],
-        ]);
-
-        $command = $validated['command'];
+        $command = $request->validated('command');
 
         try {
             $this->rcon->connect();
