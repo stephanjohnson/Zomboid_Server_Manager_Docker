@@ -12,6 +12,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 [Features](#features) · [Quick Start](#quick-start) · [Screenshots](#screenshots) · [API Reference](#rest-api-reference) · [Architecture](#architecture)
 
@@ -846,6 +847,19 @@ make nuke        # Requires typing NUKE_ALL
 - Two-factor authentication available via TOTP with recovery codes
 - PZ passwords are hashed as `bcrypt(md5(password))` with a fixed salt — the app handles this separately from Laravel's auth system
 - Destructive operations (wipe, nuke, db-reset) require explicit confirmation strings
+
+---
+
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind, express or implied. Use it entirely at your own risk.
+
+- The authors are **not responsible** for any data loss, server corruption, downtime, or other damages resulting from the use of this software.
+- This project is **not affiliated with or endorsed by** The Indie Stone, Valve, or Steam.
+- You are solely responsible for ensuring your server complies with the [Project Zomboid Dedicated Server EULA](https://projectzomboid.com) and Steam's Terms of Service.
+- Running game servers, Docker containers, and RCON commands carries inherent risks — always maintain your own backups.
+
+By using this software, you acknowledge and accept these terms. See the [LICENSE](LICENSE) file for full legal details.
 
 ---
 
