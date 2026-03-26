@@ -33,7 +33,7 @@ services:
       - ./game-server/entrypoint.sh:/home/steam/entrypoint.sh:ro
       - ./game-server/mods/ZomboidManager:/home/steam/Zomboid/mods/ZomboidManager:ro
     healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep -v grep | grep -q '[p]roject-zomboid\\|[z]omboid.*java\\|[j]ava.*zomboid'"]
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep -q '[P]rojectZomboid64'"]
       interval: 30s
       timeout: 10s
       retries: 5
