@@ -48,10 +48,16 @@ else
   echo "[entrypoint] Server files found, skipping SteamCMD. Set PZ_FORCE_UPDATE=true to force update."
 fi
 
+# Build server start arguments
+SERVER_ARGS="-servername ${SERVERNAME}"
+if [ -n "${PZ_ADMIN_PASSWORD:-}" ]; then
+  SERVER_ARGS="${SERVER_ARGS} -adminpassword ${PZ_ADMIN_PASSWORD}"
+fi
+
 # Launch the server in a screen session with auto-restart loop
 screen -d -m -S zomboid /bin/bash -c " \
   while true; do \
-    FEXBash \"/home/steam/pzserver/start-server.sh -servername \${SERVERNAME}\"; \
+    FEXBash \"/home/steam/pzserver/start-server.sh ${SERVER_ARGS}\"; \
     echo 'The server will restart in 10 seconds. If you want to stop the server, press Ctrl+C.'; \
     for i in 10 9 8 7 6 5 4 3 2 1; do echo \"\$i...\"; sleep 1; done \
   done \
