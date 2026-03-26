@@ -13,7 +13,7 @@ if [ "$(id -u)" = "0" ]; then
     chown steam:steam /home/steam/Zomboid/db 2>/dev/null || true
     chown steam:steam /home/steam/Zomboid/Saves 2>/dev/null || true
     echo "[entrypoint] Dropping to steam user..."
-    exec su -p -s /bin/bash steam -- "$0" "$@"
+    exec env HOME=/home/steam su -p -s /bin/bash steam -- "$0" "$@"
 fi
 
 # --- Everything below runs as steam user ---
