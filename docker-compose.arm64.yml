@@ -2,6 +2,7 @@ services:
   game-server:
     # Pin to a specific version tag when available to prevent supply chain attacks
     image: ghcr.io/joyfui/project-zomboid-server-docker-arm64:latest
+    user: "0:0"
     stdin_open: true
     tty: true
     entrypoint: ["/bin/bash", "/home/steam/entrypoint.sh"]

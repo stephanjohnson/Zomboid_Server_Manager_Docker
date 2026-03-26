@@ -39,11 +39,13 @@ for dir in "$PZ_DATA/Saves" "$PZ_DATA/db"; do
 done
 
 # ── Lua bridge permissions ────────────────────────────────────────────
-# Shared volume between game server and app — www-data needs write access
+# Shared volume between game server and app — both www-data and steam (UID 1001)
+# need write access. Using world-writable with sticky bit (1777) so either
+# container can write regardless of who created the files. chown doesn't work
+# here because the game server recreates files as UID 1001 after app startup.
 LUA_BRIDGE_DIR="${LUA_BRIDGE_PATH:-/lua-bridge}"
 if [ -d "$LUA_BRIDGE_DIR" ]; then
-    chown -R www-data:www-data "$LUA_BRIDGE_DIR" 2>/dev/null || true
-    chmod -R 775 "$LUA_BRIDGE_DIR" 2>/dev/null || true
+    chmod -R 1777 "$LUA_BRIDGE_DIR" 2>/dev/null || true
 fi
 
 # ── Backup directory permissions ─────────────────────────────────────
@@ -108,6 +110,18 @@ if echo "$@" | grep -q "supervisord"; then
         echo "[entrypoint] Map tiles not found — generating in background..."
         php artisan zomboid:generate-map-tiles \
             >> /var/www/html/storage/logs/map-tiles.log 2>&1 &
+    fi
+
+    # Item icons — download in background if catalog exists but icons are missing
+    ICON_DIR="/var/www/html/public/images/items"
+    CATALOG="${LUA_BRIDGE_DIR}/items_catalog.json"
+    if [ -f "$CATALOG" ]; then
+        ICON_COUNT=$(find "$ICON_DIR" -name '*.png' 2>/dev/null | head -1 | wc -l)
+        if [ "$ICON_COUNT" -eq 0 ]; then
+            echo "[entrypoint] Item icons not found — downloading in background..."
+            php artisan zomboid:download-item-icons \
+                >> /var/www/html/storage/logs/item-icons.log 2>&1 &
+        fi
     fi
 
     # Start Vite dev server only in non-production environments

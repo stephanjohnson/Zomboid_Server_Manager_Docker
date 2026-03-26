@@ -146,8 +146,10 @@ if ! echo "$CURRENT_WORKSHOP" | grep -q "$ZM_WORKSHOP_ID"; then
 fi
 
 # Pre-create Lua bridge directories for inventory exports
-mkdir -p /home/steam/Zomboid/Lua/inventory
-echo "[configure-server] Lua bridge directories created"
+mkdir -p /home/steam/Zomboid/Lua/inventory 2>/dev/null || echo "[configure-server] WARNING: Cannot create Lua/inventory directory (permission denied)"
+if [ -d /home/steam/Zomboid/Lua/inventory ]; then
+    echo "[configure-server] Lua bridge directories created"
+fi
 
 echo "[configure-server] Configuration applied:"
 echo "  Port: ${PZ_GAME_PORT:-16261}/udp"
