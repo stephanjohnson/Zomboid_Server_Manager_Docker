@@ -49,6 +49,10 @@ up: db-check
 down:
 	$(COMPOSE) down
 
+VOLUMES := pz-postgres pz-app-vendor pz-app-node-modules pz-app-build \
+	pz-server-files pz-data pz-redis pz-backups pz-lua-bridge pz-map-tiles \
+	pz-caddy-data pz-caddy-config
+
 nuke:
 	@echo "WARNING: This will destroy ALL data (database, game saves, backups, config)."
 	@echo "Type NUKE_ALL and press Enter to continue:"
@@ -57,12 +61,18 @@ nuke:
 		echo "Cancelled."; \
 		exit 1; \
 	fi
-	$(COMPOSE) down -v
-	@docker volume rm pz-postgres pz-app-vendor pz-app-node-modules pz-app-build \
-		pz-server-files pz-data pz-redis pz-backups pz-lua-bridge pz-map-tiles \
-		pz-caddy-data pz-caddy-config 2>/dev/null || true
+	$(COMPOSE) down -v --remove-orphans
+	@for vol in $(VOLUMES); do \
+		docker volume rm $$vol 2>/dev/null || true; \
+	done
+	@REMAINING=$$(docker volume ls -q --filter name=pz- 2>/dev/null); \
+	if [ -n "$$REMAINING" ]; then \
+		echo "Removing leftover volumes: $$REMAINING"; \
+		echo "$$REMAINING" | xargs docker volume rm 2>/dev/null || true; \
+	fi
 	@rm -f .env app/.env
 	@rm -f caddy/Caddyfile caddy/certs/cert.pem caddy/certs/key.pem
+	@echo "Nuke complete. All volumes and config removed."
 
 build:
 	$(COMPOSE) build

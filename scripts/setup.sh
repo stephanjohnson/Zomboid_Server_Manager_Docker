@@ -419,15 +419,20 @@ echo ""
 echo -e "${BOLD}Starting services...${NC}"
 make down 2>/dev/null || true
 
-# Caddy volumes may hold stale TLS state from a previous access mode — reset them
-docker volume rm pz-caddy-data pz-caddy-config 2>/dev/null || true
+# Remove build/cache volumes that may have stale state from a previous run
+# (game data, DB, and backups are intentionally preserved)
+for vol in pz-caddy-data pz-caddy-config pz-app-vendor pz-app-node-modules pz-app-build; do
+    docker volume rm "$vol" 2>/dev/null || true
+done
 
-# Start services (retry once — Docker can race on recently-deleted volumes)
-if ! make up; then
-    echo -e "${YELLOW}Retrying after volume cleanup...${NC}"
-    sleep 3
-    make up
+# Verify no stale pz- volumes are stuck (Docker can leave ghosts after down -v)
+STALE=$(docker volume ls -q --filter name=pz-caddy --filter name=pz-app-vendor --filter name=pz-app-node --filter name=pz-app-build 2>/dev/null || true)
+if [ -n "$STALE" ]; then
+    echo -e "${YELLOW}Cleaning leftover volumes...${NC}"
+    echo "$STALE" | xargs docker volume rm 2>/dev/null || true
 fi
+
+make up
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Sync passwords into existing volumes (re-run safe)
