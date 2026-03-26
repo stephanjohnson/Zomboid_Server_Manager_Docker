@@ -35,6 +35,7 @@ SaveWorldEveryMinutes=15
 AdminPassword=changeme
 SteamVAC=true
 EOINI
+    chmod 666 "$INI_FILE" 2>/dev/null || true
     echo "[configure-server] Initial INI created."
 fi
 
@@ -150,6 +151,11 @@ mkdir -p /home/steam/Zomboid/Lua/inventory 2>/dev/null || echo "[configure-serve
 if [ -d /home/steam/Zomboid/Lua/inventory ]; then
     echo "[configure-server] Lua bridge directories created"
 fi
+
+# Ensure config files are world-readable/writable so both steam (game server)
+# and www-data (app container) can access them on the shared volume.
+chmod 666 "$INI_FILE" 2>/dev/null || true
+[ -f "$SANDBOX_FILE" ] && chmod 666 "$SANDBOX_FILE" 2>/dev/null || true
 
 echo "[configure-server] Configuration applied:"
 echo "  Port: ${PZ_GAME_PORT:-16261}/udp"

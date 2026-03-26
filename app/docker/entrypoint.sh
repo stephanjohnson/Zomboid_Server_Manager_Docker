@@ -24,11 +24,9 @@ find /var/www/html/storage /var/www/html/bootstrap/cache -type f -not -name '.gi
 PZ_DATA="${PZ_DATA_PATH:-/pz-data}"
 PZ_SERVER_NAME_VAL="${PZ_SERVER_NAME:-ZomboidServer}"
 if [ -d "$PZ_DATA/Server" ]; then
-    chmod 775 "$PZ_DATA/Server" 2>/dev/null || true
-    chmod 664 "$PZ_DATA/Server/${PZ_SERVER_NAME_VAL}.ini" 2>/dev/null || true
-    chmod 664 "$PZ_DATA/Server/${PZ_SERVER_NAME_VAL}_SandboxVars.lua" 2>/dev/null || true
-    chown www-data:www-data "$PZ_DATA/Server/${PZ_SERVER_NAME_VAL}.ini" 2>/dev/null || true
-    chown www-data:www-data "$PZ_DATA/Server/${PZ_SERVER_NAME_VAL}_SandboxVars.lua" 2>/dev/null || true
+    chmod 777 "$PZ_DATA/Server" 2>/dev/null || true
+    chmod 666 "$PZ_DATA/Server/${PZ_SERVER_NAME_VAL}.ini" 2>/dev/null || true
+    chmod 666 "$PZ_DATA/Server/${PZ_SERVER_NAME_VAL}_SandboxVars.lua" 2>/dev/null || true
 fi
 # Saves and db directories need to be writable for backup rollback
 for dir in "$PZ_DATA/Saves" "$PZ_DATA/db"; do
