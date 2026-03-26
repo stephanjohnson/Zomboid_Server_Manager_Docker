@@ -9,7 +9,7 @@ if [ "$(id -u)" = "0" ]; then
     chown steam:steam /home/steam/Zomboid 2>/dev/null || true
     chown -R steam:steam /home/steam/Zomboid/Lua 2>/dev/null || true
     chown -R steam:steam /home/steam/Zomboid/mods 2>/dev/null || true
-    chown steam:steam /home/steam/Zomboid/Server 2>/dev/null || true
+    chown -R steam:steam /home/steam/Zomboid/Server 2>/dev/null || true
     chown steam:steam /home/steam/Zomboid/db 2>/dev/null || true
     chown steam:steam /home/steam/Zomboid/Saves 2>/dev/null || true
     echo "[entrypoint] Dropping to steam user..."
