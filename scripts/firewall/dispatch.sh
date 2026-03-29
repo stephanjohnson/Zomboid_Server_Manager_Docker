@@ -2,7 +2,7 @@
 set -euo pipefail
 # ══════════════════════════════════════════════════════════════════════════════
 # Firewall dispatch — reads .firewall.conf and calls the right backend script
-# Usage: dispatch.sh <action> [extra-args...]
+# Usage: dispatch.sh <action>
 #   action: game-open | game-close | admin-open | admin-close
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -28,8 +28,35 @@ if [ ! -f "$CONF_FILE" ]; then
     exit 1
 fi
 
-# shellcheck source=/dev/null
-source "$CONF_FILE"
+# Parse .firewall.conf as data (KEY=VALUE lines) instead of executing it
+while IFS='=' read -r key value; do
+    # Skip empty lines and comments
+    case "$key" in
+        ''|\#*) continue ;;
+    esac
+
+    case "$key" in
+        FIREWALL_BACKEND|FIREWALL_OS|FIREWALL_ZONE|CADDY_ENABLED|ADMIN_PUBLIC_HOST|ADMIN_HTTP_PORT|ADMIN_HTTPS_PORT)
+            # Trim trailing CR (for Windows-style line endings)
+            value="${value%$'\r'}"
+            # Trim leading and trailing whitespace
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            # Remove matching surrounding single or double quotes, if present
+            if [[ ${#value} -ge 2 ]]; then
+                if [[ ${value:0:1} == '"' && ${value: -1} == '"' ]] || \
+                   [[ ${value:0:1} == "'" && ${value: -1} == "'" ]]; then
+                    value="${value:1:-1}"
+                fi
+            fi
+            # Assign value without evaluation
+            printf -v "$key" '%s' "$value"
+            ;;
+        *)
+            # Ignore unknown keys
+            ;;
+    esac
+done < "$CONF_FILE"
 
 BACKEND="${FIREWALL_BACKEND:-manual}"
 
@@ -72,7 +99,8 @@ fi
 export FIREWALL_ZONE="${FIREWALL_ZONE:-}"
 export PZ_GAME_PORT="${PZ_GAME_PORT:-16261}"
 export PZ_DIRECT_PORT="${PZ_DIRECT_PORT:-16262}"
-export CADDY_HTTP_PORT="${CADDY_HTTP_PORT:-80}"
-export CADDY_HTTPS_PORT="${CADDY_HTTPS_PORT:-443}"
+# Admin ports: prefer values from .firewall.conf, fall back to env, then defaults
+export CADDY_HTTP_PORT="${ADMIN_HTTP_PORT:-${CADDY_HTTP_PORT:-80}}"
+export CADDY_HTTPS_PORT="${ADMIN_HTTPS_PORT:-${CADDY_HTTPS_PORT:-443}}"
 
 exec bash "$BACKEND_SCRIPT"

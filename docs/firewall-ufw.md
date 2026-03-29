@@ -26,9 +26,11 @@ This lets players on your **local network** connect. For **internet** players, y
 ### 3. Public Admin Panel
 
 ```bash
-make admin-expose   # Allows 80/tcp + 443/tcp for Caddy
+make admin-expose   # Allows Caddy ports for public admin
 make admin-hide     # Removes the allow rules
 ```
+
+The ports opened depend on what you chose during `make init` (default: 80/tcp + 443/tcp). Your configured ports are saved in `.firewall.conf` — check with `make info`.
 
 This opens the Caddy reverse proxy ports so remote users can access the admin panel over HTTPS. The app container stays bound to `127.0.0.1:8000` — port 8000 is **never** exposed directly.
 
@@ -64,7 +66,8 @@ sudo ufw allow 16262/udp
 sudo ufw delete allow 16261/udp
 sudo ufw delete allow 16262/udp
 
-# Open Caddy web ports
+# Open Caddy web ports — use the ports from .firewall.conf
+# Default is 80/443, but you may have chosen custom ports during setup
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 
@@ -90,7 +93,14 @@ sudo ufw status verbose
 3. Forward these ports to your server's local IP:
    - `16261/UDP` — Game port
    - `16262/UDP` — Direct connection port
-   - `80/TCP` + `443/TCP` — Only if you want public admin access
+   - Your configured Caddy HTTP + HTTPS ports (see `make info`) — only if you want public admin access
+
+### Common Issues
+
+- **Router WAN admin on port 80/443:** Many routers use port 80 or 443 for their own remote management (WAN admin) UI. When enabled, the router **intercepts** traffic on these ports before it ever reaches your server — port forwarding rules for 80/443 will silently fail. **Fix:** Disable "Remote Management" / "WAN Admin" in your router settings, or move the router's admin port to something else (e.g., 8888). Alternatively, choose custom Caddy ports during `make init` (e.g., 8080/8443) to sidestep the conflict.
+- **Double NAT:** If your server is behind two routers (e.g., ISP gateway + your router), you need to forward ports on **both** devices, or put the first device in bridge mode.
+- **CGNAT:** Some ISPs use Carrier-Grade NAT (100.64.x.x range). Port forwarding won't work — you'll need a VPN tunnel or a reverse proxy service.
+- **Dynamic IP:** If your public IP changes, use a Dynamic DNS service (e.g., DuckDNS, No-IP) and configure a domain in `make init`.
 
 ## Docker and ufw
 

@@ -495,11 +495,13 @@ The setup wizard (`make init`) detects your OS and firewall backend automaticall
 |---|---|
 | `make expose` | Opens game ports (16261-16262/udp) in host firewall |
 | `make hide` | Closes game ports |
-| `make admin-expose` | Opens Caddy web ports (80/443) for public HTTPS admin access |
+| `make admin-expose` | Opens Caddy web ports in host firewall for public admin HTTPS |
 | `make admin-hide` | Closes Caddy web ports |
+| `make info` | Shows local/public URLs, configured ports, firewall status |
 
 - **Local admin** is always available at `http://localhost:8000` — no firewall changes needed.
 - **Public admin** goes through Caddy (HTTPS), not through port 8000 directly.
+- **Caddy ports** are configurable during `make init` (default 80/443). Use custom ports if your router uses 80/443.
 - **Game ports** are closed by default. Run `make expose` to let players connect.
 - All firewall rules are **runtime only** (non-permanent) on firewalld. ufw rules persist across reboots.
 - **Router port forwarding** is not automated — see the per-OS docs below.

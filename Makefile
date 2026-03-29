@@ -55,20 +55,43 @@ db-reset:
 
 # ── Informational output ────────────────────────────────────────────
 info:
-	@PUBLIC_IP=$$(curl -4 -fsS https://api.ipify.org 2>/dev/null || true); \
-	echo "Admin URL: http://localhost:$(APP_PORT)"; \
-	if [ -n "$$PUBLIC_IP" ]; then \
-		echo "Public IP: $$PUBLIC_IP"; \
-	else \
-		echo "Public IP: unavailable"; \
-	fi; \
+	@PUBLIC_IP=$$(curl -4 -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true); \
+	echo ""; \
+	echo "╔══════════════════════════════════════════════╗"; \
+	echo "║          Zomboid Manager — Status            ║"; \
+	echo "╚══════════════════════════════════════════════╝"; \
+	echo ""; \
+	echo "  Local Admin:   http://localhost:$(APP_PORT)"; \
 	if [ -f .firewall.conf ]; then \
 		. ./.firewall.conf; \
-		echo "Firewall backend: $$FIREWALL_BACKEND"; \
+		HTTPS_PORT="$${ADMIN_HTTPS_PORT:-443}"; \
+		HTTP_PORT="$${ADMIN_HTTP_PORT:-80}"; \
+		HOST="$${ADMIN_PUBLIC_HOST:-}"; \
+		if [ -n "$$HOST" ] && [ "$$HOST" != "localhost" ]; then \
+			if [ "$$HTTPS_PORT" = "443" ]; then \
+				echo "  Public Admin:  https://$$HOST  (requires 'make admin-expose')"; \
+			else \
+				echo "  Public Admin:  https://$$HOST:$$HTTPS_PORT  (requires 'make admin-expose')"; \
+			fi; \
+		else \
+			echo "  Public Admin:  not configured (run 'make init' to enable)"; \
+		fi; \
+		echo "  Caddy Ports:   $$HTTP_PORT (HTTP) / $$HTTPS_PORT (HTTPS)"; \
+		echo "  Firewall:      $$FIREWALL_BACKEND"; \
 	else \
-		echo "Firewall: not configured (run 'make init')"; \
+		echo "  Public Admin:  not configured (run 'make init')"; \
+		echo "  Firewall:      not configured"; \
 	fi; \
-	echo "Game ports are closed by default. Run 'make expose' to allow remote players."
+	if [ -n "$$PUBLIC_IP" ]; then \
+		echo "  Public IP:     $$PUBLIC_IP"; \
+	else \
+		echo "  Public IP:     unavailable"; \
+	fi; \
+	echo "  Game Ports:    $(PZ_GAME_PORT)/udp, $(PZ_DIRECT_PORT)/udp (closed by default)"; \
+	echo ""; \
+	echo "  Run 'make expose' to allow remote players."; \
+	echo "  Run 'make admin-expose' to open public admin access."; \
+	echo ""
 
 # ── Firewall helpers ────────────────────────────────────────────────
 # These targets dispatch to OS-specific scripts via .firewall.conf.
@@ -136,19 +159,35 @@ hide:
 	@PZ_GAME_PORT=$(PZ_GAME_PORT) PZ_DIRECT_PORT=$(PZ_DIRECT_PORT) $(FW_DISPATCH) game-close
 
 # ── Admin UI exposure ───────────────────────────────────────────────
-# Opens Caddy web ports (80/443) in the firewall for public HTTPS access.
+# Opens Caddy web ports in the firewall for public HTTPS access.
+# Ports are read from .firewall.conf (set during 'make init').
 # The app stays bound to 127.0.0.1:8000 — it is never exposed directly.
 # Requires Caddy to be configured (run 'make init' first).
 admin-expose:
-	@CADDY_HTTP_PORT=$(CADDY_HTTP_PORT) CADDY_HTTPS_PORT=$(CADDY_HTTPS_PORT) $(FW_DISPATCH) admin-open
-	@echo "Admin panel exposed via Caddy on ports $(CADDY_HTTP_PORT)/$(CADDY_HTTPS_PORT)"
-	@echo "Local:  http://localhost:$(APP_PORT)"
-	@echo "Public: https://$$(curl -4 -fsS https://api.ipify.org 2>/dev/null || echo '<see-your-caddy-config>')"
+	@if [ ! -f .firewall.conf ]; then echo "Error: run 'make init' first."; exit 1; fi
+	@. ./.firewall.conf; \
+	HTTP="$${ADMIN_HTTP_PORT:-80}"; \
+	HTTPS="$${ADMIN_HTTPS_PORT:-443}"; \
+	CADDY_HTTP_PORT=$$HTTP CADDY_HTTPS_PORT=$$HTTPS $(FW_DISPATCH) admin-open; \
+	echo "Admin panel exposed via Caddy on ports $$HTTP/$$HTTPS"; \
+	echo "Local:  http://localhost:$(APP_PORT)"; \
+	HOST="$${ADMIN_PUBLIC_HOST:-}"; \
+	if [ -n "$$HOST" ] && [ "$$HOST" != "localhost" ]; then \
+		if [ "$$HTTPS" = "443" ]; then \
+			echo "Public: https://$$HOST"; \
+		else \
+			echo "Public: https://$$HOST:$$HTTPS"; \
+		fi; \
+	fi
 
 admin-hide:
-	@CADDY_HTTP_PORT=$(CADDY_HTTP_PORT) CADDY_HTTPS_PORT=$(CADDY_HTTPS_PORT) $(FW_DISPATCH) admin-close
-	@echo "Admin panel restricted to local access."
-	@echo "Local:  http://localhost:$(APP_PORT)"
+	@if [ ! -f .firewall.conf ]; then echo "Error: run 'make init' first."; exit 1; fi
+	@. ./.firewall.conf; \
+	HTTP="$${ADMIN_HTTP_PORT:-80}"; \
+	HTTPS="$${ADMIN_HTTPS_PORT:-443}"; \
+	CADDY_HTTP_PORT=$$HTTP CADDY_HTTPS_PORT=$$HTTPS $(FW_DISPATCH) admin-close; \
+	echo "Admin panel restricted to local access."; \
+	echo "Local:  http://localhost:$(APP_PORT)"
 
 # ── App commands ─────────────────────────────────────────────────────
 migrate: db-backup
@@ -208,8 +247,9 @@ help:
 	@echo "  Firewall (auto-detects backend from .firewall.conf):"
 	@echo "    expose         - Open game ports (UDP) in host firewall"
 	@echo "    hide           - Close game ports (UDP) in host firewall"
-	@echo "    admin-expose   - Open Caddy web ports (80/443) for public admin HTTPS"
-	@echo "    admin-hide     - Close Caddy web ports (80/443)"
+	@echo "    admin-expose   - Open Caddy web ports for public admin HTTPS"
+	@echo "    admin-hide     - Close Caddy web ports"
+	@echo "                     (ports read from .firewall.conf, set during 'make init')"
 	@echo ""
 	@echo "  Database:"
 	@echo "    db-check       - Check if DB volume exists, create if not"

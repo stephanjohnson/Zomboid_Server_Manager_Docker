@@ -10,9 +10,11 @@ When you run `make expose`, `make hide`, `make admin-expose`, or `make admin-hid
 |------|----------|---------|--------------|
 | `16261` | UDP | PZ game port | `make expose` — for players to connect |
 | `16262` | UDP | PZ direct connection | `make expose` — for players to connect |
-| `80` | TCP | Caddy HTTP (redirects to HTTPS) | `make admin-expose` — for public admin |
-| `443` | TCP | Caddy HTTPS (admin panel) | `make admin-expose` — for public admin |
+| *Caddy HTTP* | TCP | HTTP redirect to HTTPS | `make admin-expose` — for public admin |
+| *Caddy HTTPS* | TCP | Admin panel (HTTPS) | `make admin-expose` — for public admin |
 | `8000` | TCP | App (local only) | **Never expose** — stays on `127.0.0.1` |
+
+> Caddy ports default to 80/443 but can be customized during `make init`. Check `.firewall.conf` or run `make info` to see your configured ports.
 
 ## Access Levels
 
@@ -47,10 +49,11 @@ echo "pass in proto udp from any to any port { 16261, 16262 }" | sudo pfctl -ef 
 
 ### 3. Public Admin Panel
 
-Open TCP ports `80` and `443` in your firewall for Caddy reverse proxy access.
+Open TCP ports for Caddy reverse proxy access. The exact ports depend on what you configured during `make init` (default: 80 and 443). Check your ports with `make info`.
 
 **iptables:**
 ```bash
+# Replace 80/443 with your configured Caddy ports if different
 sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
 sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 ```
@@ -83,7 +86,14 @@ sudo iptables -D INPUT -p udp --dport 16262 -j ACCEPT
 3. Forward these ports to your server's local IP:
    - `16261/UDP` — Game port
    - `16262/UDP` — Direct connection port
-   - `80/TCP` + `443/TCP` — Only if you want public admin access via Caddy
+   - Your configured Caddy HTTP + HTTPS ports (see `make info`) — only if you want public admin access
+
+### Common Issues
+
+- **Router WAN admin on port 80/443:** Many routers use port 80 or 443 for their own remote management (WAN admin) UI. When enabled, the router **intercepts** traffic on these ports before it ever reaches your server — port forwarding rules for 80/443 will silently fail. **Fix:** Disable "Remote Management" / "WAN Admin" in your router settings, or move the router's admin port to something else (e.g., 8888). Alternatively, choose custom Caddy ports during `make init` (e.g., 8080/8443) to sidestep the conflict.
+- **Double NAT:** If your server is behind two routers (e.g., ISP gateway + your router), you need to forward ports on **both** devices, or put the first device in bridge mode.
+- **CGNAT:** Some ISPs use Carrier-Grade NAT (100.64.x.x range). Port forwarding won't work — you'll need a VPN tunnel or a reverse proxy service.
+- **Dynamic IP:** If your public IP changes, use a Dynamic DNS service (e.g., DuckDNS, No-IP) and configure a domain in `make init`.
 
 ## Switching to a Supported Backend
 
@@ -102,6 +112,9 @@ FIREWALL_BACKEND=ufw
 FIREWALL_OS=ubuntu
 FIREWALL_ZONE=
 CADDY_ENABLED=true
+ADMIN_PUBLIC_HOST=
+ADMIN_HTTP_PORT=80
+ADMIN_HTTPS_PORT=443
 ```
 
 ## About .firewall.conf
@@ -114,6 +127,9 @@ FIREWALL_BACKEND=manual    # firewalld | ufw | manual
 FIREWALL_OS=unknown        # detected OS ID from /etc/os-release
 FIREWALL_ZONE=             # firewalld zone (only for firewalld backend)
 CADDY_ENABLED=true         # whether Caddy reverse proxy is configured
+ADMIN_PUBLIC_HOST=         # hostname/IP for public admin access
+ADMIN_HTTP_PORT=80         # Caddy HTTP port (for redirect)
+ADMIN_HTTPS_PORT=443       # Caddy HTTPS port (admin panel)
 ```
 
 It is gitignored and local to your server.

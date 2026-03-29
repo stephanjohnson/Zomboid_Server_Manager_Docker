@@ -3,7 +3,8 @@
 }
 
 :443 {
-	tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
+	# Use Caddy's internal CA by default so fresh environments work without external cert files.
+	tls internal
 	reverse_proxy app:8000
 }
 

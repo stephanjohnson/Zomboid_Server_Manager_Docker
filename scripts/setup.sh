@@ -174,118 +174,232 @@ fi
 APP_PORT=8000
 CADDY_HTTP_PORT=80
 CADDY_HTTPS_PORT=443
+ADMIN_PUBLIC_ENABLED=false
 
-while true; do
-    echo ""
-    echo "  How will you access the panel?"
-    echo "  1) Domain name  (e.g., zomboid.example.com — auto Let's Encrypt)"
-    echo "  2) IP address    (public or LAN — self-signed cert)"
-    echo "  3) Localhost only (local dev — self-signed cert)"
-    echo -ne "  ${DIM}[3]${NC}: "
-    read -r access_choice || true
-    access_choice="${access_choice:-3}"
-    if ! [[ "$access_choice" =~ ^[123]$ ]]; then
-        echo -e "  ${RED}Invalid choice. Enter 1, 2, or 3.${NC}"
-        continue
-    fi
+echo ""
+echo -ne "  Enable public admin access (via Caddy reverse proxy)? ${DIM}[Y/n]${NC}: "
+read -r enable_public || true
+enable_public="${enable_public:-y}"
 
-    case "$access_choice" in
-        1)
-            while true; do
-                prompt SITE_HOST "Domain name" ""
-                if [ -n "$SITE_HOST" ] && [[ "$SITE_HOST" =~ ^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$ ]]; then
-                    break
-                fi
-                echo -e "  ${RED}Invalid domain name. Try again.${NC}"
-            done
-            # DNS pre-check: verify domain resolves to this server
-            DOMAIN_IP=$(dig +short "$SITE_HOST" 2>/dev/null | tail -1)
-            if [ -z "$DOMAIN_IP" ]; then
-                echo -e "  ${RED}${SITE_HOST} does not resolve to any IP address.${NC}"
-                echo -e "  ${RED}Let's Encrypt requires DNS to be configured first.${NC}"
-                continue
-            elif [ -n "$SERVER_IP" ] && [ "$DOMAIN_IP" != "$SERVER_IP" ]; then
-                echo -e "  ${RED}${SITE_HOST} resolves to ${DOMAIN_IP}, but this server's public IP is ${SERVER_IP}.${NC}"
-                echo -e "  ${RED}Let's Encrypt will fail unless the domain points to this server.${NC}"
-                continue
-            else
-                echo -e "  ${GREEN}✓ ${SITE_HOST} resolves to ${DOMAIN_IP}${NC}"
-            fi
-            APP_URL="https://${SITE_HOST}"
-            CADDY_SITE="${SITE_HOST}"
-            CADDY_TLS=""
-            break
-            ;;
-        2)
-            # Collect detected IPs into a numbered list
-            IP_OPTIONS=()
-            IP_LABELS=()
-            if [ -n "$SERVER_IP" ]; then
-                IP_OPTIONS+=("$SERVER_IP")
-                IP_LABELS+=("$SERVER_IP  (public)")
-            fi
-            LOCAL_IPS=$(hostname -I 2>/dev/null || true)
-            for lip in $LOCAL_IPS; do
-                # Skip Docker/bridge IPs (172.x) and the public IP if already listed
-                if [ "$lip" = "$SERVER_IP" ]; then continue; fi
-                if [[ "$lip" =~ ^172\. ]]; then continue; fi
-                IP_OPTIONS+=("$lip")
-                IP_LABELS+=("$lip  (LAN)")
-            done
+if [ "${enable_public,,}" = "n" ]; then
+    # Local-only mode
+    SITE_HOST="localhost"
+    APP_URL="https://localhost"
+    CADDY_SITE="localhost"
+    CADDY_TLS=$'\ttls internal'
+    ADMIN_PUBLIC_ENABLED=false
+    echo -e "  ${GREEN}✓ Panel will be available locally at http://localhost:${APP_PORT}${NC}"
+else
+    ADMIN_PUBLIC_ENABLED=true
 
-            if [ ${#IP_OPTIONS[@]} -gt 0 ]; then
-                echo ""
-                echo "  Detected addresses:"
-                for i in "${!IP_OPTIONS[@]}"; do
-                    echo "    $((i+1))) ${IP_LABELS[$i]}"
+    # ── Hostname / Domain / IP ────────────────────────────────────────────
+    while true; do
+        echo ""
+        echo "  How will you access the panel?"
+        echo "  1) Domain name  (e.g., zomboid.example.com — auto Let's Encrypt)"
+        echo "  2) IP address    (public or LAN — self-signed cert)"
+        echo -ne "  ${DIM}[2]${NC}: "
+        read -r access_choice || true
+        access_choice="${access_choice:-2}"
+        if ! [[ "$access_choice" =~ ^[12]$ ]]; then
+            echo -e "  ${RED}Invalid choice. Enter 1 or 2.${NC}"
+            continue
+        fi
+
+        case "$access_choice" in
+            1)
+                while true; do
+                    prompt SITE_HOST "Domain name" ""
+                    if [ -n "$SITE_HOST" ] && [[ "$SITE_HOST" =~ ^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$ ]]; then
+                        break
+                    fi
+                    echo -e "  ${RED}Invalid domain name. Try again.${NC}"
                 done
-                echo "    $((${#IP_OPTIONS[@]}+1))) Enter manually"
-                echo -ne "  ${DIM}[1]${NC}: "
-                read -r ip_pick || true
-                ip_pick="${ip_pick:-1}"
-
-                if [[ "$ip_pick" =~ ^[0-9]+$ ]] && [ "$ip_pick" -ge 1 ] && [ "$ip_pick" -le "${#IP_OPTIONS[@]}" ]; then
-                    SITE_HOST="${IP_OPTIONS[$((ip_pick-1))]}"
+                # DNS pre-check: verify domain resolves to this server
+                DOMAIN_IP=$(dig +short "$SITE_HOST" 2>/dev/null | tail -1)
+                if [ -z "$DOMAIN_IP" ]; then
+                    echo -e "  ${RED}${SITE_HOST} does not resolve to any IP address.${NC}"
+                    echo -e "  ${RED}Let's Encrypt requires DNS to be configured first.${NC}"
+                    continue
+                elif [ -n "$SERVER_IP" ] && [ "$DOMAIN_IP" != "$SERVER_IP" ]; then
+                    echo -e "  ${RED}${SITE_HOST} resolves to ${DOMAIN_IP}, but this server's public IP is ${SERVER_IP}.${NC}"
+                    echo -e "  ${RED}Let's Encrypt will fail unless the domain points to this server.${NC}"
+                    continue
                 else
-                    # Manual entry
+                    echo -e "  ${GREEN}✓ ${SITE_HOST} resolves to ${DOMAIN_IP}${NC}"
+                fi
+                APP_URL="https://${SITE_HOST}"
+                CADDY_SITE="${SITE_HOST}"
+                CADDY_TLS=""
+                break
+                ;;
+            2)
+                # Collect detected IPs into a numbered list
+                IP_OPTIONS=()
+                IP_LABELS=()
+                if [ -n "$SERVER_IP" ]; then
+                    IP_OPTIONS+=("$SERVER_IP")
+                    IP_LABELS+=("$SERVER_IP  (public)")
+                fi
+                LOCAL_IPS=$(hostname -I 2>/dev/null || true)
+                for lip in $LOCAL_IPS; do
+                    # Skip Docker/bridge IPs (172.x) and the public IP if already listed
+                    if [ "$lip" = "$SERVER_IP" ]; then continue; fi
+                    if [[ "$lip" =~ ^172\. ]]; then continue; fi
+                    IP_OPTIONS+=("$lip")
+                    IP_LABELS+=("$lip  (LAN)")
+                done
+
+                if [ ${#IP_OPTIONS[@]} -gt 0 ]; then
+                    echo ""
+                    echo "  Detected addresses:"
+                    for i in "${!IP_OPTIONS[@]}"; do
+                        echo "    $((i+1))) ${IP_LABELS[$i]}"
+                    done
+                    echo "    $((${#IP_OPTIONS[@]}+1))) Enter manually"
+                    echo -ne "  ${DIM}[1]${NC}: "
+                    read -r ip_pick || true
+                    ip_pick="${ip_pick:-1}"
+
+                    if [[ "$ip_pick" =~ ^[0-9]+$ ]] && [ "$ip_pick" -ge 1 ] && [ "$ip_pick" -le "${#IP_OPTIONS[@]}" ]; then
+                        SITE_HOST="${IP_OPTIONS[$((ip_pick-1))]}"
+                    else
+                        # Manual entry
+                        while true; do
+                            prompt SITE_HOST "IP address" ""
+                            if [ -n "$SITE_HOST" ] && [[ "$SITE_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                                break
+                            fi
+                            echo -e "  ${RED}Invalid IP address. Try again.${NC}"
+                        done
+                    fi
+                else
+                    # No IPs detected — fall back to manual entry
                     while true; do
-                        prompt SITE_HOST "IP address" ""
+                        prompt SITE_HOST "Server IP address" ""
                         if [ -n "$SITE_HOST" ] && [[ "$SITE_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                             break
                         fi
                         echo -e "  ${RED}Invalid IP address. Try again.${NC}"
                     done
                 fi
-            else
-                # No IPs detected — fall back to manual entry
-                while true; do
-                    prompt SITE_HOST "Server IP address" ""
-                    if [ -n "$SITE_HOST" ] && [[ "$SITE_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                        break
-                    fi
-                    echo -e "  ${RED}Invalid IP address. Try again.${NC}"
-                done
-            fi
 
-            echo -e "  ${GREEN}✓ Using ${SITE_HOST}${NC}"
-            APP_URL="https://${SITE_HOST}"
-            CADDY_SITE=":443"
-            CADDY_TLS=$'\ttls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem'
-            GENERATE_SELF_SIGNED=true
-            break
-            ;;
-        3)
-            SITE_HOST="localhost"
-            APP_URL="https://localhost"
-            CADDY_SITE="localhost"
-            CADDY_TLS=$'\ttls internal'
-            break
-            ;;
-    esac
-done
+                echo -e "  ${GREEN}✓ Using ${SITE_HOST}${NC}"
+                APP_URL="https://${SITE_HOST}"
+                CADDY_SITE=":443"
+                CADDY_TLS=$'\ttls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem'
+                GENERATE_SELF_SIGNED=true
+                break
+                ;;
+        esac
+    done
+
+    # ── Caddy Ports ───────────────────────────────────────────────────────
+    echo ""
+    echo -e "  ${BOLD}Caddy listening ports${NC}"
+    echo -e "  ${DIM}Caddy is the reverse proxy that handles HTTPS for the admin panel.${NC}"
+    echo -e "  ${DIM}Default is 80 (HTTP redirect) and 443 (HTTPS). Change if your router${NC}"
+    echo -e "  ${DIM}or another service already uses these ports.${NC}"
+
+    # Ports that should never be used for a web proxy — well-known service ports
+    # that would conflict with system services or pose security risks.
+    # 21=FTP, 22=SSH, 23=Telnet, 25=SMTP, 53=DNS, 110=POP3, 143=IMAP,
+    # 445=SMB, 465=SMTPS, 587=Submission, 993=IMAPS, 995=POP3S, 3306=MySQL,
+    # 5432=PostgreSQL, 6379=Redis
+    BLOCKED_PORTS="21 22 23 25 53 110 143 445 465 587 993 995 3306 5432 6379"
+
+    is_blocked_port() {
+        local p="$1"
+        for bp in $BLOCKED_PORTS; do
+            [ "$p" -eq "$bp" ] && return 0
+        done
+        return 1
+    }
+
+    while true; do
+        echo -ne "  HTTPS port ${DIM}[443]${NC}: "
+        read -r port_input || true
+        CADDY_HTTPS_PORT="${port_input:-443}"
+
+        # Validate: must be a number in range
+        if ! [[ "$CADDY_HTTPS_PORT" =~ ^[0-9]+$ ]] || [ "$CADDY_HTTPS_PORT" -lt 1 ] || [ "$CADDY_HTTPS_PORT" -gt 65535 ]; then
+            echo -e "  ${RED}Invalid port number.${NC}"
+            continue
+        fi
+        # Block well-known service ports
+        if is_blocked_port "$CADDY_HTTPS_PORT"; then
+            echo -e "  ${RED}Port ${CADDY_HTTPS_PORT} is a well-known service port and cannot be used here.${NC}"
+            continue
+        fi
+        # Warn on privileged ports (non-standard)
+        if [ "$CADDY_HTTPS_PORT" -lt 1024 ] && [ "$CADDY_HTTPS_PORT" -ne 443 ]; then
+            echo -e "  ${YELLOW}Warning: Port ${CADDY_HTTPS_PORT} is a privileged port (< 1024).${NC}"
+            echo -ne "  ${YELLOW}Continue? ${DIM}[Y/n]${NC}: "
+            read -r priv_ok || true
+            if [ "${priv_ok,,}" = "n" ]; then continue; fi
+        fi
+        break
+    done
+
+    while true; do
+        echo -ne "  HTTP port (for redirect to HTTPS) ${DIM}[80]${NC}: "
+        read -r port_input || true
+        CADDY_HTTP_PORT="${port_input:-80}"
+
+        if ! [[ "$CADDY_HTTP_PORT" =~ ^[0-9]+$ ]] || [ "$CADDY_HTTP_PORT" -lt 1 ] || [ "$CADDY_HTTP_PORT" -gt 65535 ]; then
+            echo -e "  ${RED}Invalid port number.${NC}"
+            continue
+        fi
+        if is_blocked_port "$CADDY_HTTP_PORT"; then
+            echo -e "  ${RED}Port ${CADDY_HTTP_PORT} is a well-known service port and cannot be used here.${NC}"
+            continue
+        fi
+        if [ "$CADDY_HTTP_PORT" -eq "$CADDY_HTTPS_PORT" ]; then
+            echo -e "  ${RED}HTTP and HTTPS ports must be different.${NC}"
+            continue
+        fi
+        if [ "$CADDY_HTTP_PORT" -lt 1024 ] && [ "$CADDY_HTTP_PORT" -ne 80 ]; then
+            echo -e "  ${YELLOW}Warning: Port ${CADDY_HTTP_PORT} is a privileged port (< 1024).${NC}"
+            echo -ne "  ${YELLOW}Continue? ${DIM}[Y/n]${NC}: "
+            read -r priv_ok || true
+            if [ "${priv_ok,,}" = "n" ]; then continue; fi
+        fi
+        break
+    done
+
+    # Warn about common router admin conflicts
+    if [ "$CADDY_HTTP_PORT" -eq 80 ] || [ "$CADDY_HTTPS_PORT" -eq 443 ]; then
+        echo ""
+        echo -e "  ${YELLOW}Warning: Some routers use ports 80/443 for their own WAN remote management UI.${NC}"
+        echo -e "  ${YELLOW}If enabled, your router will intercept traffic on these ports before it${NC}"
+        echo -e "  ${YELLOW}reaches your server — port forwarding alone won't fix this.${NC}"
+        echo -e "  ${DIM}Fix: Disable 'Remote Management' / 'WAN Admin' in your router settings,${NC}"
+        echo -e "  ${DIM}or move the router admin to a different port, or choose custom Caddy${NC}"
+        echo -e "  ${DIM}ports here (e.g., 8080/8443) to avoid the conflict entirely.${NC}"
+    fi
+
+    echo -e "  ${GREEN}✓ Caddy will listen on ports ${CADDY_HTTP_PORT} (HTTP) and ${CADDY_HTTPS_PORT} (HTTPS)${NC}"
+
+    # Update APP_URL with non-standard HTTPS port
+    if [ "$CADDY_HTTPS_PORT" -ne 443 ]; then
+        APP_URL="https://${SITE_HOST}:${CADDY_HTTPS_PORT}"
+    fi
+
+    # Warn: Let's Encrypt requires ports 80/443 for domain validation
+    if [ "$access_choice" = "1" ] && { [ "$CADDY_HTTP_PORT" -ne 80 ] || [ "$CADDY_HTTPS_PORT" -ne 443 ]; }; then
+        echo ""
+        echo -e "  ${YELLOW}Warning: Let's Encrypt HTTP challenge requires ports 80 and 443.${NC}"
+        echo -e "  ${YELLOW}Non-standard ports may prevent automatic certificate issuance.${NC}"
+        echo -e "  ${YELLOW}Consider using standard ports with a domain, or switch to IP mode.${NC}"
+    fi
+fi
 
 # ── Firewall Backend ──────────────────────────────────────────────────────────
 # Detect or prompt for firewall backend, generates .firewall.conf
+# Pass admin port settings so they're persisted in the same config file
+export ADMIN_PUBLIC_HOST="${SITE_HOST:-localhost}"
+export ADMIN_HTTP_PORT="${CADDY_HTTP_PORT}"
+export ADMIN_HTTPS_PORT="${CADDY_HTTPS_PORT}"
 bash scripts/firewall/detect.sh .firewall.conf
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -298,7 +412,11 @@ echo -e "  Admin:        ${GREEN}${ADMIN_USERNAME}${NC}"
 echo -e "  Server:       ${GREEN}${PZ_SERVER_NAME}${NC}"
 echo -e "  Players:      ${GREEN}${PZ_MAX_PLAYERS}${NC} / RAM: ${GREEN}${PZ_MAX_RAM}${NC}"
 echo -e "  Branch:       ${GREEN}${PZ_STEAM_BRANCH}${NC}"
-echo -e "  Panel:        ${GREEN}${APP_URL}${NC} (HTTPS via Caddy)"
+if [ "$ADMIN_PUBLIC_ENABLED" = "true" ]; then
+    echo -e "  Panel:        ${GREEN}${APP_URL}${NC} (HTTPS via Caddy, ports ${CADDY_HTTP_PORT}/${CADDY_HTTPS_PORT})"
+else
+    echo -e "  Panel:        ${GREEN}http://localhost:${APP_PORT}${NC} (local only)"
+fi
 echo -e "  Architecture: ${GREEN}${ARCH_LABEL}${NC}"
 if [ -f .firewall.conf ]; then
     . .firewall.conf
@@ -561,7 +679,7 @@ else
 fi
 echo ""
 echo -e "  ${BOLD}Local Admin:${NC}   http://localhost:${APP_PORT}"
-if [ "$access_choice" != "3" ]; then
+if [ "$ADMIN_PUBLIC_ENABLED" = "true" ]; then
     echo -e "  ${BOLD}Public Admin:${NC}  ${APP_URL}  ${DIM}(requires 'make admin-expose')${NC}"
 fi
 echo -e "  ${BOLD}Admin User:${NC}    ${ADMIN_USERNAME}"
